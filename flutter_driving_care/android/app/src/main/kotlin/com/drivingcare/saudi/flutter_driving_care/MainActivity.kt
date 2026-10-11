@@ -26,6 +26,63 @@ class MainActivity : FlutterActivity() {
                     startActivity(intent)
                     result.success(true)
                 }
+                "isBatteryOptExempt" -> {
+                    val powerManager = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+                    val isExempt = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                        powerManager.isIgnoringBatteryOptimizations(packageName)
+                    } else {
+                        true
+                    }
+                    result.success(isExempt)
+                }
+                "openBatterySettings" -> {
+                    try {
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                            try {
+                                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                    data = Uri.parse("package:$packageName")
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                }
+                                startActivity(intent)
+                            } catch (e: Exception) {
+                                val fallback = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                }
+                                startActivity(fallback)
+                            }
+                        } else {
+                            val fallback = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            startActivity(fallback)
+                        }
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("BATTERY_SETTING_ERROR", e.message, null)
+                    }
+                }
+                "canDrawOverlays" -> {
+                    val canDraw = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                        Settings.canDrawOverlays(this)
+                    } else {
+                        true
+                    }
+                    result.success(canDraw)
+                }
+                "openOverlaySettings" -> {
+                    try {
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                            val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                                data = Uri.parse("package:$packageName")
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            startActivity(intent)
+                        }
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("OVERLAY_SETTING_ERROR", e.message, null)
+                    }
+                }
                 "openAppDetailsSettings" -> {
                     try {
                         val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
@@ -78,6 +135,51 @@ class MainActivity : FlutterActivity() {
                         result.success(true)
                     } catch (e: Exception) {
                         result.error("WHATSAPP_ERROR", e.message, null)
+                    }
+                }
+                "saveLicenseCache" -> {
+                    try {
+                        val key = call.argument<String>("key") ?: ""
+                        val name = call.argument<String>("name") ?: "Driver"
+                        val days = call.argument<Int>("days") ?: 30
+                        val prefs = getSharedPreferences("DrivingCareLicenseCache", Context.MODE_PRIVATE)
+                        prefs.edit().apply {
+                            putString("key", key)
+                            putString("name", name)
+                            putInt("days", days)
+                            putLong("savedAt", System.currentTimeMillis())
+                            apply()
+                        }
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("CACHE_ERROR", e.message, null)
+                    }
+                }
+                "loadLicenseCache" -> {
+                    try {
+                        val prefs = getSharedPreferences("DrivingCareLicenseCache", Context.MODE_PRIVATE)
+                        val key = prefs.getString("key", null)
+                        if (key != null && key.isNotEmpty()) {
+                            val map = HashMap<String, Any>()
+                            map["key"] = key
+                            map["name"] = prefs.getString("name", "Driver") ?: "Driver"
+                            map["days"] = prefs.getInt("days", 30)
+                            map["savedAt"] = prefs.getLong("savedAt", 0L)
+                            result.success(map)
+                        } else {
+                            result.success(null)
+                        }
+                    } catch (e: Exception) {
+                        result.error("CACHE_ERROR", e.message, null)
+                    }
+                }
+                "clearLicenseCache" -> {
+                    try {
+                        val prefs = getSharedPreferences("DrivingCareLicenseCache", Context.MODE_PRIVATE)
+                        prefs.edit().clear().apply()
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("CACHE_ERROR", e.message, null)
                     }
                 }
                 else -> result.notImplemented()

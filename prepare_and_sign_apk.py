@@ -4,10 +4,10 @@ import zipfile
 import shutil
 
 BASE_DIR = r"F:\download\saudia cleint"
-SRC_APK = os.path.join(BASE_DIR, "Driving_Care_v1.0.apk")
+SRC_APK = os.path.join(BASE_DIR, "flutter_driving_care", "build", "app", "outputs", "flutter-apk", "app-release.apk")
 UNSIGNED_APK = os.path.join(BASE_DIR, "Driving_Care_unsigned.apk")
 ALIGNED_APK = os.path.join(BASE_DIR, "Driving_Care_aligned.apk")
-FINAL_APK = os.path.join(BASE_DIR, "Driving_Care_v2.0_Installable.apk")
+FINAL_APK = os.path.join(BASE_DIR, "Driving_Care_v2.4_Production.apk")
 KEYSTORE = os.path.join(BASE_DIR, "driving_care.keystore")
 
 ZIPALIGN = r"F:\tools\android-sdk\build-tools\34.0.0\zipalign.exe"
@@ -18,7 +18,11 @@ env = os.environ.copy()
 env["JAVA_HOME"] = JAVA_HOME
 env["PATH"] = f"{JAVA_HOME}\\bin;{os.path.dirname(APKSIGNER)};" + env.get("PATH", "")
 
-print("Step 1: Stripping all existing META-INF files...")
+print(f"Step 1: Stripping all existing META-INF files from {SRC_APK}...")
+if not os.path.exists(SRC_APK):
+    print(f"Error: {SRC_APK} does not exist!")
+    exit(1)
+
 with zipfile.ZipFile(SRC_APK, 'r') as zin:
     with zipfile.ZipFile(UNSIGNED_APK, 'w', compression=zipfile.ZIP_DEFLATED) as zout:
         for item in zin.infolist():
@@ -67,6 +71,13 @@ if res.returncode != 0:
     exit(1)
 
 print(f"SUCCESS: Final installable APK created: {FINAL_APK} ({os.path.getsize(FINAL_APK)} bytes)")
+
+# Copy to cpanel_deploy folders as well
+cpanel_v24 = os.path.join(BASE_DIR, "cpanel_deploy", "Driving_Care_v2.4_Production.apk")
+cpanel_v20 = os.path.join(BASE_DIR, "cpanel_deploy", "Driving_Care_Official_v2.0.apk")
+shutil.copyfile(FINAL_APK, cpanel_v24)
+shutil.copyfile(FINAL_APK, cpanel_v20)
+print(f"Copied to {cpanel_v24} and {cpanel_v20}")
 
 print("Step 4: Verifying final APK with apksigner verify...")
 verify_cmd = [APKSIGNER, "verify", "-v", "--print-certs", FINAL_APK]

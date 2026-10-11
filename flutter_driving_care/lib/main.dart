@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'license_crypto.dart';
 
 void main() {
   runApp(const DrivingCareApp());
@@ -99,7 +100,7 @@ class DrivingCareHomeScreen extends StatefulWidget {
   State<DrivingCareHomeScreen> createState() => _DrivingCareHomeScreenState();
 }
 
-class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> {
+class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with WidgetsBindingObserver {
   // Method Channel to communicate with Native Android Accessibility Service
   static const platform = MethodChannel('com.drivingcare.saudi/accessibility');
 
@@ -130,10 +131,10 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> {
   String maxPrice = '100';
   String maxPickupTime = '10';
 
-  // Native Accessibility Service Status
+  // Native Accessibility Service Status (Genuine defaults from OS)
   bool isAccessibilityActive = false;
-  bool batteryOptGranted = true;
-  bool overlayGranted = true;
+  bool batteryOptGranted = false;
+  bool overlayGranted = false;
 
   // Saudi Blocked Locations
   final List<SaudiLocationItem> allLocations = [
@@ -167,17 +168,123 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> {
   @override
   void initState() {
     super.initState();
-    _checkNativeAccessibilityStatus();
+    WidgetsBinding.instance.addObserver(this);
+    _loadCachedLicense();
+    _checkAllPermissions();
     _startTimers();
     _syncSettingsToNativeService(engineOn: true);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _heartbeatTimer?.cancel();
     _countdownTimer?.cancel();
     _keyController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkAllPermissions();
+    }
+  }
+
+  Future<void> _checkAllPermissions() async {
+    await Future.wait([
+      _checkNativeAccessibilityStatus(),
+      _checkBatteryOptStatus(),
+      _checkOverlayStatus(),
+    ]);
+  }
+
+  Future<void> _checkBatteryOptStatus() async {
+    try {
+      final bool? isExempt = await platform.invokeMethod<bool>('isBatteryOptExempt');
+      if (mounted) {
+        setState(() {
+          batteryOptGranted = isExempt ?? false;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _checkOverlayStatus() async {
+    try {
+      final bool? canDraw = await platform.invokeMethod<bool>('canDrawOverlays');
+      if (mounted) {
+        setState(() {
+          overlayGranted = canDraw ?? false;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _openBatterySettings() async {
+    try {
+      await platform.invokeMethod('openBatterySettings');
+    } catch (_) {}
+  }
+
+  Future<void> _openOverlaySettings() async {
+    try {
+      await platform.invokeMethod('openOverlaySettings');
+    } catch (_) {}
+  }
+
+  Future<void> _loadCachedLicense() async {
+    try {
+      final result = await platform.invokeMethod<Map>('loadLicenseCache');
+      if (result != null && result['key'] != null) {
+        final key = result['key'].toString();
+        final name = result['name']?.toString() ?? 'Driver';
+        final days = result['days'] is int ? result['days'] as int : 30;
+        final savedAt = result['savedAt'] is int ? result['savedAt'] as int : 0;
+        
+        final elapsedDays = savedAt > 0 ? ((DateTime.now().millisecondsSinceEpoch - savedAt) / (86400 * 1000)).floor() : 0;
+        final remaining = days - elapsedDays;
+        
+        if (remaining > 0) {
+          setState(() {
+            isActivated = true;
+            isTrial = false;
+            licenseKey = key;
+            driverName = name;
+            expiryDisplay = '$remaining Din Baqi';
+            lockReason = '';
+          });
+          _syncSettingsToNativeService(engineOn: true);
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveLicenseCache({required String key, required String name, required int days}) async {
+    try {
+      await platform.invokeMethod('saveLicenseCache', {
+        'key': key,
+        'name': name,
+        'days': days,
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _reportSilentTelemetry(String key, String name, int days) async {
+    try {
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
+      client.userAgent = 'DrivingCareApp/2.4';
+      final uri = Uri.parse('$serverUrl/api/ping');
+      final request = await client.postUrl(uri);
+      request.headers.contentType = ContentType.json;
+      request.write(jsonEncode({
+        'key': key,
+        'driverName': name,
+        'daysLeft': days,
+        'device': 'Android Mobile Driver',
+      }));
+      await request.close();
+    } catch (_) {}
   }
 
   void _startTimers() {
@@ -292,14 +399,19 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> {
     }
   }
 
-  // Heartbeat check: If Ikram locks/blocks the key on his laptop, app locks immediately
+  // Heartbeat check: Periodic check (Tolerates network drops with zero lockouts)
   Future<void> _sendHeartbeatCheck() async {
     try {
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+      client.userAgent = 'DrivingCareApp/2.4';
       final uri = Uri.parse('$serverUrl/api/ping');
       final request = await client.postUrl(uri);
       request.headers.contentType = ContentType.json;
-      request.write(jsonEncode({'key': licenseKey}));
+      request.write(jsonEncode({
+        'key': licenseKey,
+        'driverName': driverName,
+        'device': 'Android Mobile Driver',
+      }));
       final response = await request.close();
       final bodyStr = await response.transform(utf8.decoder).join();
       final data = jsonDecode(bodyStr);
@@ -308,30 +420,35 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> {
         if (response.statusCode == 200 && data['success'] == true) {
           final status = (data['status'] ?? 'active').toString().toLowerCase();
           if (status == 'blocked' || status == 'suspended' || status == 'inactive') {
-            // BACKEND LOCK TRIGGERED BY IKRAM!
+            // ONLY lock when admin EXPLICITLY revokes access on the server
             setState(() {
               isActivated = false;
               lockReason = 'Admin (Ikram) ne aapka access suspend / lock kar diya hai.';
             });
             _syncSettingsToNativeService(engineOn: false);
+            try {
+              platform.invokeMethod('clearLicenseCache');
+            } catch (_) {}
           } else {
             setState(() {
               isServerConnected = true;
             });
           }
-        } else if (response.statusCode == 404 || response.statusCode == 403) {
-          // Key deleted or invalid on server
-          setState(() {
-            isActivated = false;
-            lockReason = 'Aapki License Key expire ya cancel ho chuki hai.';
-          });
-          _syncSettingsToNativeService(engineOn: false);
         }
+        // NOTE: On any other non-blocked response, keep previous activation active!
       }
-    } catch (_) {}
+    } catch (_) {
+      // Network drop, timeout, slow net:
+      // STRICT RULE: KABHI LOCK NAHI HOGA! Grace period active, engine chalta rahega!
+      if (mounted) {
+        setState(() {
+          isServerConnected = false;
+        });
+      }
+    }
   }
 
-  // Activate with user-entered key (Adnan or client)
+  // Activate with user-entered key (Fast Offline Ed25519 Verification + Fallback)
   Future<void> _activateWithKey() async {
     final key = _keyController.text.trim();
     if (key.isEmpty) {
@@ -344,9 +461,37 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> {
       return;
     }
 
+    // 1. FAST OFFLINE VERIFICATION (Ed25519 & Pre-Authorized Whitelist - Works in Airplane Mode)
+    final offlineCheck = await DrivingCareCrypto.verifyOfflineKey(key);
+    if (offlineCheck.isValid) {
+      setState(() {
+        isActivated = true;
+        isTrial = false;
+        licenseKey = offlineCheck.key;
+        driverName = offlineCheck.driverName;
+        expiryDisplay = '${offlineCheck.daysLeft} Din Baqi';
+        lockReason = '';
+      });
+      _saveLicenseCache(key: offlineCheck.key, name: offlineCheck.driverName, days: offlineCheck.daysLeft);
+      _syncSettingsToNativeService(engineOn: true);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF10B981),
+          content: Text('License Verified! Driving Care Unlocked ✔ (${offlineCheck.driverName})'),
+        ),
+      );
+
+      // Silent telemetry report in background (Fire & Forget, does NOT block activation)
+      _reportSilentTelemetry(offlineCheck.key, offlineCheck.driverName, offlineCheck.daysLeft);
+      return;
+    }
+
+    // 2. Fallback to Online Server Verification if key was generated dynamically
     try {
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
-      client.userAgent = 'DrivingCareApp/2.3';
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+      client.userAgent = 'DrivingCareApp/2.4';
       final uri = Uri.parse('$serverUrl/api/login');
       final request = await client.postUrl(uri);
       request.headers.contentType = ContentType.json;
@@ -361,14 +506,16 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> {
       if (!mounted) return;
       if (response.statusCode == 200 && data['success'] == true) {
         final days = data['driver']?['daysLeft'] ?? 30;
+        final name = data['driver']?['name'] ?? 'Authorized Driver';
         setState(() {
           isActivated = true;
           isTrial = false;
           licenseKey = key.toUpperCase();
-          driverName = data['driver']?['name'] ?? 'Authorized Driver';
-          expiryDisplay = '$days Din Active';
+          driverName = name;
+          expiryDisplay = '$days Din Baqi';
           lockReason = '';
         });
+        _saveLicenseCache(key: key.toUpperCase(), name: name, days: days);
         _syncSettingsToNativeService(engineOn: true);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -380,37 +527,20 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: const Color(0xFFEF4444),
-            content: Text(data['message'] ?? 'Ghalat Key! Ikram (03113154649) se rabta karein.'),
+            content: Text(data['message'] ?? 'Invalid License Key! Developer Ikram se rabta karein.'),
           ),
         );
       }
     } catch (e) {
       if (!mounted) return;
-      // Master Offline Keys
-      if (key.toUpperCase() == 'IKRAM-VIP' || key.toUpperCase() == 'DC-8921') {
-        setState(() {
-          isActivated = true;
-          isTrial = false;
-          licenseKey = key.toUpperCase();
-          driverName = 'Ikram Master Admin';
-          expiryDisplay = 'Permanent Access';
-          lockReason = '';
-        });
-        _syncSettingsToNativeService(engineOn: true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: Color(0xFF10B981),
-            content: Text('Master Key Verified! Driving Care Unlocked ✔'),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: Color(0xFFEF4444),
-            content: Text('Invalid License Key! Developer Ikram se rabta karein.'),
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFFEF4444),
+          content: Text(offlineCheck.errorMessage.isNotEmpty
+              ? offlineCheck.errorMessage
+              : 'Server se rabta nahi ho saka. Baraye meherbani internet check karein.'),
+        ),
+      );
     }
   }
 
@@ -468,172 +598,6 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> {
     );
   }
 
-  void _showTestOrderOverlay() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return Container(
-          margin: const EdgeInsets.all(16),
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: const [
-              BoxShadow(color: Colors.black26, blurRadius: 20, offset: Offset(0, 6)),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF2563EB).withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text(
-                          'Jeeny Incoming Ride',
-                          style: TextStyle(
-                            color: Color(0xFF2563EB),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF10B981).withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Text(
-                          'CASH 💵',
-                          style: TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Text(
-                    'SAR 48.00',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF10B981),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Column(
-                    children: [
-                      const Icon(Icons.circle, color: Color(0xFF2563EB), size: 12),
-                      Container(width: 2, height: 26, color: Colors.grey.shade400),
-                      const Icon(Icons.location_on, color: Color(0xFFEF4444), size: 16),
-                    ],
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Pickup: Al Olaya St, Riyadh',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                        ),
-                        SizedBox(height: 14),
-                        Text(
-                          'Destination: KAFD Tower 2.14, Riyadh',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: widget.isDarkMode ? Colors.black26 : const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    Text('Pickup Time: 4 mins', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                    Text('Distance: 6.8 km', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                    Text('Auto-Filter: PASS ✔', style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 12)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFEF4444),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Order Rejected')),
-                        );
-                      },
-                      child: const Text('REJECT ✕', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF10B981),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        setState(() {
-                          orderHistory.insert(0, {
-                            'platform': 'Jeeny',
-                            'fare': '48 SAR',
-                            'pickup': 'Al Olaya St',
-                            'time': 'Just now',
-                          });
-                        });
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            backgroundColor: Color(0xFF10B981),
-                            content: Text('Order Accepted by Driving Care Bot!'),
-                          ),
-                        );
-                      },
-                      child: const Text('AUTO ACCEPT ✔', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
 
   void _showOrderHistory() {
     showDialog(
@@ -696,6 +660,8 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> {
           serverUrl: serverUrl,
           licenseKey: licenseKey,
           onOpenAccessibilitySettings: _openNativeAccessibilitySettings,
+          onOpenBatterySettings: _openBatterySettings,
+          onOpenOverlaySettings: _openOverlaySettings,
         ),
       ),
     );
@@ -986,33 +952,59 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> {
         children: [
           // Warning Banner: Accessibility Service is OFF
           if (!isAccessibilityActive)
-            InkWell(
-              onTap: () {
-                _openNativeAccessibilitySettings();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Settings khul rahi hai. Driving Care ko Turn ON karein!')),
-                );
-              },
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEF4444),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.warning_amber_rounded, color: Colors.white, size: 24),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        '⚠️ Accessibility Service OFF Hai!\nYahan Tap Kar Ke ON Karein taake bot auto-click kar sake.',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  InkWell(
+                    onTap: () {
+                      _openNativeAccessibilitySettings();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Settings khul rahi hai. Driving Care ko Turn ON karein!')),
+                      );
+                    },
+                    child: const Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded, color: Colors.white, size: 24),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            '⚠️ Accessibility Service OFF Hai!\nTap karein aur Driving Care ko Turn ON karein.',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
+                        ),
+                        Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 14),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  InkWell(
+                    onTap: _openAppDetailsSettings,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black26,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.lock_open_rounded, color: Colors.white, size: 14),
+                          SizedBox(width: 6),
+                          Text(
+                            'Android 13/14 "Restricted Setting" Grayed out? Tap here',
+                            style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
+                        ],
                       ),
                     ),
-                    Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 14),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
 
@@ -1038,6 +1030,123 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> {
                 ],
               ),
             ),
+
+          // Live Engine & Permissions Status Card (Fix 6: Real status from OS)
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: borderColor),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Live Engine & Permissions Status',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: runAutoEngine
+                            ? const Color(0xFF10B981).withOpacity(0.12)
+                            : const Color(0xFFEF4444).withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        runAutoEngine ? 'ENGINE ACTIVE' : 'ENGINE PAUSED',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: runAutoEngine ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    InkWell(
+                      onTap: () {
+                        _openNativeAccessibilitySettings();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Accessibility Settings khul rahi hain...')),
+                        );
+                      },
+                      child: Column(
+                        children: [
+                          Icon(
+                            isAccessibilityActive ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                            color: isAccessibilityActive ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                            size: 22,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Accessibility\n${isAccessibilityActive ? "ON ✔" : "OFF ✕"}',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () {
+                        _openBatterySettings();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Battery Optimization Settings khul rahi hain...')),
+                        );
+                      },
+                      child: Column(
+                        children: [
+                          Icon(
+                            batteryOptGranted ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                            color: batteryOptGranted ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                            size: 22,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Battery Opt\n${batteryOptGranted ? "Exempt ✔" : "Restricted ✕"}',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () {
+                        _openOverlaySettings();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Display Overlay Settings khul rahi hain...')),
+                        );
+                      },
+                      child: Column(
+                        children: [
+                          Icon(
+                            overlayGranted ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                            color: overlayGranted ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                            size: 22,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Overlay\n${overlayGranted ? "Granted ✔" : "Denied ✕"}',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
 
           // Account Verified Card (sec_70.jpg)
           Container(
@@ -1114,25 +1223,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> {
 
           const SizedBox(height: 14),
 
-          // Simulation & Test Buttons
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2563EB),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 13),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              icon: const Icon(Icons.visibility_outlined, size: 20),
-              label: const Text(
-                'TEST CARD ORDERS OVERLAY',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.5),
-              ),
-              onPressed: _showTestOrderOverlay,
-            ),
-          ),
-          const SizedBox(height: 8),
+
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
@@ -1357,6 +1448,8 @@ class AdvancedControlScreen extends StatefulWidget {
   final String serverUrl;
   final String licenseKey;
   final VoidCallback onOpenAccessibilitySettings;
+  final VoidCallback onOpenBatterySettings;
+  final VoidCallback onOpenOverlaySettings;
 
   const AdvancedControlScreen({
     super.key,
@@ -1378,13 +1471,15 @@ class AdvancedControlScreen extends StatefulWidget {
     required this.serverUrl,
     required this.licenseKey,
     required this.onOpenAccessibilitySettings,
+    required this.onOpenBatterySettings,
+    required this.onOpenOverlaySettings,
   });
 
   @override
   State<AdvancedControlScreen> createState() => _AdvancedControlScreenState();
 }
 
-class _AdvancedControlScreenState extends State<AdvancedControlScreen> {
+class _AdvancedControlScreenState extends State<AdvancedControlScreen> with WidgetsBindingObserver {
   late bool runAutoEngine;
   late bool autoRefresh;
   late bool autoReject;
@@ -1407,6 +1502,7 @@ class _AdvancedControlScreenState extends State<AdvancedControlScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     runAutoEngine = widget.runAutoEngine;
     autoRefresh = widget.autoRefresh;
     autoReject = widget.autoReject;
@@ -1423,16 +1519,42 @@ class _AdvancedControlScreenState extends State<AdvancedControlScreen> {
     allLocations = List<SaudiLocationItem>.from(widget.allLocations);
     avoidWords = List<String>.from(widget.avoidWords);
     likedWords = List<String>.from(widget.likedWords);
+
+    _refreshPermissions();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _minPriceController.dispose();
     _maxPriceController.dispose();
     _maxPickupController.dispose();
     _avoidController.dispose();
     _likedController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshPermissions();
+    }
+  }
+
+  Future<void> _refreshPermissions() async {
+    const platform = MethodChannel('com.drivingcare.saudi/accessibility');
+    try {
+      final isAcc = await platform.invokeMethod<bool>('isAccessibilityEnabled');
+      final isBatt = await platform.invokeMethod<bool>('isBatteryOptExempt');
+      final isOver = await platform.invokeMethod<bool>('canDrawOverlays');
+      if (mounted) {
+        setState(() {
+          isAccessibilityActive = isAcc ?? false;
+          batteryOptGranted = isBatt ?? false;
+          overlayGranted = isOver ?? false;
+        });
+      }
+    } catch (_) {}
   }
 
   void _openQuickSelectBlockedLocationsModal() {
@@ -1717,9 +1839,9 @@ class _AdvancedControlScreenState extends State<AdvancedControlScreen> {
                         icon: Icons.battery_charging_full_rounded,
                         isGranted: batteryOptGranted,
                         onTap: () {
-                          setState(() => batteryOptGranted = !batteryOptGranted);
+                          widget.onOpenBatterySettings();
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Battery Optimization: Unrestricted ✔')),
+                            const SnackBar(content: Text('Battery Optimization Settings khul rahi hain...')),
                           );
                         },
                       ),
@@ -1728,13 +1850,35 @@ class _AdvancedControlScreenState extends State<AdvancedControlScreen> {
                         icon: Icons.layers_rounded,
                         isGranted: overlayGranted,
                         onTap: () {
-                          setState(() => overlayGranted = !overlayGranted);
+                          widget.onOpenOverlaySettings();
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Display Overlay Enabled ✔')),
+                            const SnackBar(content: Text('Display Overlay Settings khul rahi hain...')),
                           );
                         },
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.3)),
+                    ),
+                    child: const Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.info_outline, size: 16, color: Color(0xFFD97706)),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Samsung / Xiaomi Users: Settings → Apps → Driving Care → Battery → "Unrestricted" select karein aur Device Care "Sleeping apps" se Driving Care ko bahir rakhein taake background mein bot band na ho.',
+                            style: TextStyle(fontSize: 11, color: Color(0xFFB45309), height: 1.3),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
