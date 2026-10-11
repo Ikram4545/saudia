@@ -1,0 +1,37 @@
+RewriteEngine On
+RewriteBase /
+
+# Disable ModSecurity for API
+<IfModule mod_security.c>
+    SecRuleEngine Off
+    SecFilterEngine Off
+    SecFilterScanPOST Off
+</IfModule>
+
+# CORS Headers
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, OPTIONS, DELETE"
+    Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Admin-Token, X-Admin-Password"
+</IfModule>
+
+# Handle OPTIONS preflight
+RewriteCond %{REQUEST_METHOD} OPTIONS
+RewriteRule ^(.*)$ $1 [R=200,L]
+
+# Route /admin and /admin/ to admin.html
+RewriteRule ^admin/?$ admin.html [L,QSA]
+
+# Route clean REST API URLs to PHP scripts
+RewriteRule ^api/login/?$ api/login.php [L,QSA]
+RewriteRule ^api/ping/?$ api/ping.php [L,QSA]
+RewriteRule ^api/trial/?$ api/trial.php [L,QSA]
+RewriteRule ^api/settings/?$ api/settings.php [L,QSA]
+RewriteRule ^api/admin/login/?$ api/admin_login.php [L,QSA]
+RewriteRule ^api/admin/drivers/?$ api/admin_drivers.php [L,QSA]
+RewriteRule ^api/admin/create-key/?$ api/admin_create_key.php [L,QSA]
+RewriteRule ^api/admin/delete-driver/?$ api/admin_delete_driver.php [L,QSA]
+RewriteRule ^api/admin/toggle-driver/?$ api/admin_toggle_driver.php [L,QSA]
+
+# Default Document for root is index.html
+DirectoryIndex index.html index.php

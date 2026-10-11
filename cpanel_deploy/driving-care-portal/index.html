@@ -1,0 +1,1409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Driving Care - License & Driver Management Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="/style.css">
+  <style>
+:root {
+  --bg-primary: #0a0d14;
+  --bg-secondary: #101622;
+  --bg-card: rgba(18, 24, 38, 0.75);
+  --bg-card-hover: rgba(26, 34, 52, 0.85);
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-focus: rgba(16, 185, 129, 0.5);
+  
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  
+  --accent-emerald: #10b981;
+  --accent-emerald-glow: rgba(16, 185, 129, 0.25);
+  --accent-cyan: #06b6d4;
+  --accent-blue: #3b82f6;
+  --accent-amber: #f59e0b;
+  --accent-rose: #f43f5e;
+  
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-full: 9999px;
+  
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 6px 16px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.6);
+  --shadow-glow: 0 0 20px var(--accent-emerald-glow);
+  
+  --font-main: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-main);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  line-height: 1.5;
+  background-image: 
+    radial-gradient(circle at 15% 15%, rgba(16, 185, 129, 0.07) 0%, transparent 40%),
+    radial-gradient(circle at 85% 75%, rgba(6, 182, 212, 0.06) 0%, transparent 45%);
+  background-attachment: fixed;
+}
+
+/* NAVBAR */
+.navbar {
+  background: rgba(16, 22, 34, 0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.nav-container {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.brand-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, #10b981, #06b6d4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+}
+
+.brand-info h1 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  background: linear-gradient(90deg, #fff, #93c5fd);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.brand-badge {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  display: block;
+}
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.admin-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-color);
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: #3b82f6;
+  color: white;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+}
+
+.profile-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.partner-note {
+  font-size: 0.7rem;
+  color: var(--accent-emerald);
+}
+
+/* BUTTONS */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: var(--transition);
+  font-family: inherit;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #059669, #047857);
+  box-shadow: 0 6px 18px rgba(16, 185, 129, 0.45);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.btn-outline:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  border-radius: var(--radius-sm);
+}
+
+.btn-icon {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* MAIN CONTAINER */
+.main-container {
+  max-width: 1320px;
+  margin: 28px auto;
+  padding: 0 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* STATS GRID */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+}
+
+.stat-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  overflow: hidden;
+  transition: var(--transition);
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: transparent;
+}
+
+.stat-total::before { background: var(--accent-blue); }
+.stat-active::before { background: var(--accent-emerald); }
+.stat-pending::before { background: var(--accent-amber); }
+.stat-revenue::before { background: linear-gradient(90deg, #10b981, #06b6d4); }
+
+.stat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.stat-title {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.stat-icon {
+  font-size: 1.1rem;
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+  letter-spacing: -0.5px;
+}
+
+.stat-value .currency {
+  font-size: 1rem;
+  color: var(--accent-cyan);
+  font-weight: 600;
+}
+
+.stat-subtext {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.highlight-share {
+  color: var(--accent-emerald);
+  font-size: 0.85rem;
+}
+
+/* CONTROLS SECTION */
+.controls-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.filter-tabs {
+  display: flex;
+  background: var(--bg-secondary);
+  padding: 4px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  gap: 4px;
+  overflow-x: auto;
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+
+.tab-btn:hover {
+  color: var(--text-primary);
+}
+
+.tab-btn.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.search-filter-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 8px 14px;
+  color: var(--text-muted);
+  width: 280px;
+  transition: var(--transition);
+}
+
+.search-box:focus-within {
+  border-color: var(--accent-emerald);
+  box-shadow: 0 0 0 3px var(--accent-emerald-glow);
+}
+
+.search-box input {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.85rem;
+  width: 100%;
+  outline: none;
+}
+
+.search-box input::placeholder {
+  color: var(--text-muted);
+}
+
+/* DRIVERS TABLE */
+.drivers-table-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.drivers-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.drivers-table th {
+  background: rgba(255, 255, 255, 0.02);
+  padding: 14px 18px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.drivers-table td {
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  font-size: 0.88rem;
+  vertical-align: middle;
+}
+
+.drivers-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.driver-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.driver-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(16, 185, 129, 0.2));
+  border: 1px solid var(--border-color);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.driver-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.driver-phone {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wa-link {
+  color: #25d366;
+  text-decoration: none;
+  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+}
+
+.wa-link:hover {
+  text-decoration: underline;
+}
+
+.key-code {
+  font-family: var(--font-mono);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.key-code:hover {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: var(--accent-emerald);
+  color: #fff;
+}
+
+/* BADGES */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge-active {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-pending {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.badge-expired {
+  background: rgba(244, 63, 94, 0.15);
+  color: #fb7185;
+  border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+.progress-pill {
+  width: 100px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent-emerald);
+  border-radius: var(--radius-full);
+}
+
+.progress-fill.warning { background: var(--accent-amber); }
+.progress-fill.danger { background: var(--accent-rose); }
+
+.time-text {
+  font-size: 0.8rem;
+  font-weight: 500;
+  display: block;
+}
+
+.action-btns {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.empty-state {
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.empty-icon {
+  font-size: 3rem;
+  margin-bottom: 12px;
+}
+
+/* INFO GRID */
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 20px;
+}
+
+.info-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+
+.info-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.info-card-header h3 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.tag {
+  font-size: 0.72rem;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+}
+
+.tag-blue { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+.tag-green { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+
+.rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rule-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.rule-icon {
+  font-size: 1.1rem;
+}
+
+.partnership-box p {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.revenue-highlight {
+  margin-top: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+
+.revenue-highlight div {
+  display: flex;
+  justify-content: space-between;
+}
+
+.revenue-highlight .val {
+  font-weight: 600;
+}
+
+.text-emerald { color: var(--accent-emerald); }
+
+/* MODALS */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal-card {
+  background: #111726;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 520px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: modalIn 0.25s ease-out;
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.96) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal-header {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-header h2 {
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.5rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.close-btn:hover {
+  color: #fff;
+}
+
+#driverForm {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.form-group input, 
+.form-group select {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.9rem;
+  outline: none;
+  transition: var(--transition);
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: var(--accent-emerald);
+  box-shadow: 0 0 0 3px var(--accent-emerald-glow);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.key-input-wrapper {
+  display: flex;
+  gap: 8px;
+}
+
+.key-input-wrapper input {
+  font-family: var(--font-mono);
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.radio-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+
+.radio-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+
+.radio-label input {
+  margin-top: 3px;
+}
+
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 10px;
+}
+
+/* SIMULATOR STYLES */
+.simulator-card {
+  max-width: 440px;
+}
+
+.simulator-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.sim-note {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.mobile-frame {
+  width: 290px;
+  height: 480px;
+  background: #0f172a;
+  border: 4px solid #334155;
+  border-radius: 36px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-lg);
+  position: relative;
+}
+
+.phone-notch {
+  width: 60px;
+  height: 6px;
+  background: #334155;
+  border-radius: var(--radius-full);
+  margin: 0 auto 12px;
+}
+
+.phone-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: #1e1b4b;
+  border-radius: 20px;
+  padding: 16px;
+  color: #fff;
+}
+
+.app-header-sim {
+  text-align: center;
+}
+
+.app-title-sim {
+  font-weight: 800;
+  font-size: 0.95rem;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.sim-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.sim-badge.inactive { background: #ef4444; color: #fff; }
+.sim-badge.active { background: #10b981; color: #fff; }
+
+.sim-box {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 12px;
+  border-radius: var(--radius-md);
+}
+
+.sim-box label {
+  font-size: 0.75rem;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.sim-input-row {
+  display: flex;
+  gap: 6px;
+}
+
+.sim-input-row input {
+  width: 100%;
+  background: #0f172a;
+  border: 1px solid #475569;
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  color: #fff;
+  font-size: 0.8rem;
+  outline: none;
+}
+
+.sim-result {
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid #10b981;
+  border-radius: var(--radius-md);
+  padding: 10px;
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.sim-footer {
+  text-align: center;
+  font-size: 0.7rem;
+  color: #cbd5e1;
+}
+
+.sim-wa {
+  color: #4ade80;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+/* TOAST */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 300;
+}
+
+.toast {
+  background: #1e293b;
+  color: #fff;
+  border: 1px solid var(--border-color);
+  padding: 12px 18px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: toastIn 0.2s ease-out;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 768px) {
+  .nav-container { flex-direction: column; align-items: stretch; }
+  .controls-section { flex-direction: column; align-items: stretch; }
+  .search-box { width: 100%; }
+  .form-row { grid-template-columns: 1fr; }
+}
+
+  
+/* Master Admin Security Gate Styling */
+.admin-login-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: rgba(10, 13, 20, 0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.admin-login-card {
+  width: 100%;
+  max-width: 440px;
+  background: #141a28;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 20px;
+  padding: 36px 30px;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7), 0 0 50px rgba(37, 99, 235, 0.2);
+  animation: cardFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes cardFadeIn {
+  from { opacity: 0; transform: scale(0.95) translateY(12px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.login-brand {
+  text-align: center;
+  margin-bottom: 24px;
+}
+.lock-icon-circle {
+  width: 64px;
+  height: 64px;
+  background: rgba(37, 99, 235, 0.14);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+.login-brand h2 {
+  font-size: 1.55rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #fff;
+  margin: 0 0 4px;
+}
+.login-sub {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  display: block;
+  margin-bottom: 8px;
+}
+.login-auth-badge {
+  display: inline-block;
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+</style>
+</head>
+<body>
+  <!-- Top Navigation Bar -->
+  <header class="navbar">
+    <div class="nav-container">
+      <div class="brand">
+        <div class="brand-logo">
+          <svg width="28" height="28" style="width:28px!important; height:28px!important; max-width:28px!important; max-height:28px!important; display:inline-block;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.5 2.8C2.1 10.9 2 11.2 2 11.5V16c0 .6.4 1 1 1h2"/>
+            <circle cx="7" cy="17" r="2"/>
+            <path d="M9 17h6"/>
+            <circle cx="17" cy="17" r="2"/>
+          </svg>
+        </div>
+        <div class="brand-info">
+          <h1>DRIVING CARE</h1>
+          <span class="brand-badge">Driver Bot Portal &bull; KSA 🇸🇦</span>
+        </div>
+      </div>
+
+      <div class="nav-actions">
+        <div class="admin-profile">
+          <div class="avatar">B</div>
+          <div class="profile-details">
+            <span class="admin-name">Bilal (Admin)</span>
+            <span class="partner-note">Partner: Ikram (Dev 15%)</span>
+          </div>
+        </div>
+        <a href="../driving-care-app/index.html" target="_blank" class="btn" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px; background:rgba(16,185,129,0.15); color:#10b981; border:1px solid #10b981; padding:8px 14px; border-radius:10px; font-weight:700; font-size:0.85rem;">
+          📱 Open Driver App
+        </a>
+        <button id="addDriverBtn" class="btn btn-primary">
+          <svg width="28" height="28" style="width:28px!important; height:28px!important; max-width:28px!important; max-height:28px!important; display:inline-block;" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          Add New Driver
+        </button>
+      </div>
+    </div>
+          <button id="adminLogoutBtn" class="btn btn-outline" style="border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; background: rgba(239, 68, 68, 0.12); padding: 8px 14px; border-radius: 10px; font-weight: 700; font-size: 0.85rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+          🔒 Logout
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Dashboard Container -->
+  <main class="main-container">
+    <!-- Quick Statistics Grid -->
+    <section class="stats-grid">
+      <div class="stat-card stat-total">
+        <div class="stat-header">
+          <span class="stat-title">Total Drivers</span>
+          <span class="stat-icon">👥</span>
+        </div>
+        <div class="stat-value" id="totalDriversCount">0</div>
+        <div class="stat-subtext">Registered across Saudi Arabia</div>
+      </div>
+
+      <div class="stat-card stat-active">
+        <div class="stat-header">
+          <span class="stat-title">Active Licenses</span>
+          <span class="stat-icon">🟢</span>
+        </div>
+        <div class="stat-value" id="activeLicensesCount">0</div>
+        <div class="stat-subtext">30-day active bot access</div>
+      </div>
+
+      <div class="stat-card stat-pending">
+        <div class="stat-header">
+          <span class="stat-title">Expired / Pending</span>
+          <span class="stat-icon">⏳</span>
+        </div>
+        <div class="stat-value" id="expiredLicensesCount">0</div>
+        <div class="stat-subtext">Requires monthly renewal</div>
+      </div>
+
+      <div class="stat-card stat-revenue">
+        <div class="stat-header">
+          <span class="stat-title">Monthly Revenue</span>
+          <span class="stat-icon">💰</span>
+        </div>
+        <div class="stat-value" id="totalRevenueSAR">0 <span class="currency">SAR</span></div>
+        <div class="stat-subtext">
+          <span>Ikram (15% Share): </span>
+          <strong id="ikramShareText" class="highlight-share">0 SAR</strong>
+        </div>
+      </div>
+    </section>
+
+    <!-- Navigation Tabs & Search Controls -->
+    <section class="controls-section">
+      <div class="filter-tabs">
+        <button class="tab-btn active" data-filter="all">All Drivers (<span id="countAll">0</span>)</button>
+        <button class="tab-btn" data-filter="active">Active (<span id="countActive">0</span>)</button>
+        <button class="tab-btn" data-filter="expiring">Expiring Soon (<span id="countExpiring">0</span>)</button>
+        <button class="tab-btn" data-filter="expired">Expired (<span id="countExpired">0</span>)</button>
+        <button class="tab-btn" data-filter="pending">Pending Payment (<span id="countPending">0</span>)</button>
+      </div>
+
+      <div class="search-filter-wrapper">
+        <div class="search-box">
+          <svg width="28" height="28" style="width:28px!important; height:28px!important; max-width:28px!important; max-height:28px!important; display:inline-block;" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="text" id="searchInput" placeholder="Search driver name, phone, or key...">
+        </div>
+        <button id="openSimulatorBtn" class="btn btn-secondary">
+          <svg width="28" height="28" style="width:28px!important; height:28px!important; max-width:28px!important; max-height:28px!important; display:inline-block;" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+            <line x1="12" y1="18" x2="12.01" y2="18"></line>
+          </svg>
+          Test Driver App View
+        </button>
+        <button id="exportDataBtn" class="btn btn-outline" title="Export Backup JSON">
+          <svg width="28" height="28" style="width:28px!important; height:28px!important; max-width:28px!important; max-height:28px!important; display:inline-block;" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Backup
+        </button>
+      </div>
+    </section>
+
+    <!-- Drivers List Container -->
+    <section class="drivers-table-card">
+      <div class="table-responsive">
+        <table class="drivers-table">
+          <thead>
+            <tr>
+              <th>Driver Details</th>
+              <th>City</th>
+              <th>License Key</th>
+              <th>Status & Validity</th>
+              <th>Remaining Time</th>
+              <th>Monthly Fee</th>
+              <th class="text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="driversTableBody">
+            <!-- Populated dynamically via JS -->
+          </tbody>
+        </table>
+      </div>
+      <div id="emptyState" class="empty-state" style="display: none;">
+        <div class="empty-icon">🚗</div>
+        <h3>No Drivers Found</h3>
+        <p>Click "Add New Driver" to generate the first 30-day license key.</p>
+      </div>
+    </section>
+
+    <!-- Bot Rules & Configurations Summary (Bottom Card) -->
+    <section class="info-grid">
+      <div class="info-card">
+        <div class="info-card-header">
+          <h3>⚡ Driving Care Bot Rules (KSA)</h3>
+          <span class="tag tag-blue">Auto-Accept Active</span>
+        </div>
+        <div class="rules-list">
+          <div class="rule-item">
+            <span class="rule-icon">💵</span>
+            <div>
+              <strong>Target Fare:</strong> 10 SAR – 100 SAR (Auto-Accept enabled)
+            </div>
+          </div>
+          <div class="rule-item">
+            <span class="rule-icon">🚫</span>
+            <div>
+              <strong>Auto Reject:</strong> Rides below 10 SAR are auto-declined instantly
+            </div>
+          </div>
+          <div class="rule-item">
+            <span class="rule-icon">⏱️</span>
+            <div>
+              <strong>Pickup Limit:</strong> Configurable 5–10 minutes max ETA
+            </div>
+          </div>
+          <div class="rule-item">
+            <span class="rule-icon">📍</span>
+            <div>
+              <strong>Blocked Areas:</strong> Airport (مطار), Al Batha, Shamisi, Manfuhah, SAR Station
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="info-card">
+        <div class="info-card-header">
+          <h3>🤝 Revenue Partnership (Deal Terms)</h3>
+          <span class="tag tag-green">70,000 PKR + 15% Share</span>
+        </div>
+        <div class="partnership-box">
+          <p><strong>Owner:</strong> Bilal (Receives full driver subscription fees directly in Saudi Arabia).</p>
+          <p><strong>Technical Partner:</strong> Ikram (Maintains cloud license server, app updates, and bot anti-ban optimizations).</p>
+          <div class="revenue-highlight">
+            <div>
+              <span class="lbl">Milestone 1 (Testing Demo):</span>
+              <span class="val">35,000 PKR (50%)</span>
+            </div>
+            <div>
+              <span class="lbl">Milestone 2 (Go-Live Handover):</span>
+              <span class="val">35,000 PKR (50%)</span>
+            </div>
+            <div>
+              <span class="lbl">Monthly Royalty per Driver:</span>
+              <span class="val text-emerald">15% Recurring</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- MODAL: Add / Edit Driver -->
+  <div id="driverModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="modalTitle">Add New Driver</h2>
+        <button id="closeModalBtn" class="close-btn">&times;</button>
+      </div>
+      <form id="driverForm">
+        <div class="form-group">
+          <label for="driverName">Driver Full Name *</label>
+          <input type="text" id="driverName" placeholder="e.g. Tariq Khan" required>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="driverPhone">Saudi WhatsApp Number *</label>
+            <input type="text" id="driverPhone" placeholder="e.g. +966 50 123 4567" required>
+          </div>
+          <div class="form-group">
+            <label for="driverCity">City / Province</label>
+            <select id="driverCity">
+              <option value="Riyadh">Riyadh (الرياض)</option>
+              <option value="Jeddah">Jeddah (جدة)</option>
+              <option value="Dammam">Dammam (الدمام)</option>
+              <option value="Mecca">Mecca (مكة)</option>
+              <option value="Medina">Medina (المدينة)</option>
+              <option value="Khobar">Khobar (الخبر)</option>
+              <option value="Other">Other Region</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="driverKey">License Key</label>
+            <div class="key-input-wrapper">
+              <input type="text" id="driverKey" placeholder="DC-XXXX" required>
+              <button type="button" id="regenerateKeyBtn" class="btn btn-sm btn-outline" title="Generate random key">New Key</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="driverFee">Monthly Subscription (SAR)</label>
+            <input type="number" id="driverFee" value="150" min="50" step="10">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Payment & Activation Status</label>
+          <div class="radio-options">
+            <label class="radio-label">
+              <input type="radio" name="initialStatus" value="active" checked>
+              <span class="radio-custom"></span>
+              <span><strong>Paid & Active Now:</strong> Start 30-Day timer immediately</span>
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="initialStatus" value="pending">
+              <span class="radio-custom"></span>
+              <span><strong>Payment Pending:</strong> Create key now, activate when payment received</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="cancelDriverBtn" class="btn btn-secondary">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save & Issue Key</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Driver App Simulation (Testing View) -->
+  <div id="simulatorModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card simulator-card">
+      <div class="modal-header">
+        <h2>📱 Driver App Simulation ("Driving Care")</h2>
+        <button id="closeSimulatorBtn" class="close-btn">&times;</button>
+      </div>
+      <div class="simulator-body">
+        <p class="sim-note">Test how the Android Bot verifies keys when drivers enter them into their phones:</p>
+        
+        <div class="mobile-frame">
+          <div class="phone-notch"></div>
+          <div class="phone-screen">
+            <div class="app-header-sim">
+              <div class="app-title-sim">DRIVING CARE BOT</div>
+              <div id="simStatusBanner" class="sim-badge inactive">ACCOUNT INACTIVE</div>
+            </div>
+
+            <div class="sim-box">
+              <label>Enter User Key:</label>
+              <div class="sim-input-row">
+                <input type="text" id="simKeyInput" placeholder="Enter License Key...">
+                <button type="button" id="simVerifyBtn" class="btn btn-sm btn-primary">Activate</button>
+              </div>
+            </div>
+
+            <div id="simVerificationResult" class="sim-result" style="display: none;">
+              <!-- Dynamic result -->
+            </div>
+
+            <div class="sim-footer">
+              <div>Need Key? Contact Bilal:</div>
+              <div class="sim-wa">WhatsApp: +966 53 419 9549</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  
+  <!-- Master Admin Security Gate / Login Modal -->
+  <div id="adminLoginModal" class="admin-login-overlay" style="display: flex;">
+    <div class="admin-login-card">
+      <div class="login-brand">
+        <div class="lock-icon-circle">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+        </div>
+        <h2>DRIVING CARE</h2>
+        <span class="login-sub">Saudi Dispatch Bot &bull; Master Admin Security</span>
+        <div class="login-auth-badge">🔒 Restricted: Bilal & Ikram (Developer) Only</div>
+      </div>
+
+      <form id="adminLoginForm" class="login-form">
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #94a3b8; margin-bottom: 6px;">Admin Username</label>
+          <input type="text" id="adminUsernameInput" class="form-input" value="ikram" placeholder="Username (ikram / bilal / admin)" required style="width: 100%; padding: 12px 14px; background: rgba(16,22,34,0.9); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; color: #fff; font-size: 0.95rem;">
+        </div>
+        <div class="form-group" style="margin-bottom: 18px;">
+          <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #94a3b8; margin-bottom: 6px;">Admin Password</label>
+          <div style="position: relative;">
+            <input type="password" id="adminPasswordInput" class="form-input" placeholder="Enter Master Admin Password" required autofocus style="width: 100%; padding: 12px 42px 12px 14px; background: rgba(16,22,34,0.9); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; color: #fff; font-size: 0.95rem;">
+            <button type="button" id="toggleAdminPwBtn" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 1.1rem;">👁️</button>
+          </div>
+        </div>
+        <div id="loginErrorAlert" style="display: none; background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #fca5a5; padding: 10px 14px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 16px; text-align: center; font-weight: 500;"></div>
+        <button type="submit" id="adminLoginSubmitBtn" class="btn btn-primary" style="width: 100%; padding: 13px; font-weight: 700; font-size: 1rem; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 14px rgba(37,99,235,0.4);">
+          <span>🔓 Sign In to Admin Panel</span>
+        </button>
+      </form>
+
+      <div class="login-footer-info" style="margin-top: 22px; text-align: center; font-size: 0.8rem; color: #64748b; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 14px; line-height: 1.6;">
+        <div>Developer Support: <strong>Ikram (03113154649)</strong></div>
+        <div>Default Password: <code style="color: #60a5fa; background: rgba(59,130,246,0.15); padding: 2px 6px; border-radius: 4px; font-family: monospace;">ikram786</code></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+    <script src="app.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
