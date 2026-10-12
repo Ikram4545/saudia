@@ -135,6 +135,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
   bool isAccessibilityActive = false;
   bool batteryOptGranted = false;
   bool overlayGranted = false;
+  bool notificationsGranted = true;
 
   // Saudi Blocked Locations
   final List<SaudiLocationItem> allLocations = [
@@ -196,6 +197,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
       _checkNativeAccessibilityStatus(),
       _checkBatteryOptStatus(),
       _checkOverlayStatus(),
+      _checkNotificationStatus(),
     ]);
   }
 
@@ -218,6 +220,31 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
           overlayGranted = canDraw ?? false;
         });
       }
+    } catch (_) {}
+  }
+
+  Future<void> _checkNotificationStatus() async {
+    try {
+      final bool? enabled = await platform.invokeMethod<bool>('areNotificationsEnabled');
+      if (mounted) {
+        setState(() {
+          notificationsGranted = enabled ?? true;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _requestNotificationPermission() async {
+    try {
+      await platform.invokeMethod('requestNotificationPermission');
+      await Future.delayed(const Duration(milliseconds: 400));
+      await _checkNotificationStatus();
+    } catch (_) {}
+  }
+
+  Future<void> _openNotificationSettings() async {
+    try {
+      await platform.invokeMethod('openNotificationSettings');
     } catch (_) {}
   }
 
@@ -654,6 +681,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
           isAccessibilityActive: isAccessibilityActive,
           batteryOptGranted: batteryOptGranted,
           overlayGranted: overlayGranted,
+          notificationsGranted: notificationsGranted,
           allLocations: allLocations,
           avoidWords: avoidWords,
           likedWords: likedWords,
@@ -662,6 +690,10 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
           onOpenAccessibilitySettings: _openNativeAccessibilitySettings,
           onOpenBatterySettings: _openBatterySettings,
           onOpenOverlaySettings: _openOverlaySettings,
+          onOpenNotificationSettings: () {
+            _requestNotificationPermission();
+            _openNotificationSettings();
+          },
         ),
       ),
     );
@@ -1091,7 +1123,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
                           Text(
                             'Accessibility\n${isAccessibilityActive ? "ON ✔" : "OFF ✕"}',
                             textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
                           ),
                         ],
                       ),
@@ -1112,9 +1144,9 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Battery Opt\n${batteryOptGranted ? "Exempt ✔" : "Restricted ✕"}',
+                            'Battery\n${batteryOptGranted ? "Exempt ✔" : "Restricted ✕"}',
                             textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
                           ),
                         ],
                       ),
@@ -1137,7 +1169,33 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
                           Text(
                             'Overlay\n${overlayGranted ? "Granted ✔" : "Denied ✕"}',
                             textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () {
+                        if (!notificationsGranted) {
+                          _requestNotificationPermission();
+                          _openNotificationSettings();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Notification settings khul rahi hain, allow karein.')),
+                          );
+                        }
+                      },
+                      child: Column(
+                        children: [
+                          Icon(
+                            notificationsGranted ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                            color: notificationsGranted ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                            size: 22,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Notification\n${notificationsGranted ? "Active ✔" : "Blocked ✕"}',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
                           ),
                         ],
                       ),
@@ -1147,6 +1205,52 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
               ],
             ),
           ),
+
+          if (!notificationsGranted)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFFCA5A5)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.notifications_off_rounded, color: Color(0xFFDC2626), size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text(
+                          'Notifications Blocked Hain!',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF991B1B)),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Background mein Jeeny alerts ke liye notification zaroori hai.',
+                          style: TextStyle(fontSize: 11, color: Color(0xFF7F1D1D)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      _requestNotificationPermission();
+                      _openNotificationSettings();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFDC2626),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      minimumSize: Size.zero,
+                    ),
+                    child: const Text('Unlock', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
 
           // Account Verified Card (sec_70.jpg)
           Container(
@@ -1442,6 +1546,7 @@ class AdvancedControlScreen extends StatefulWidget {
   final bool isAccessibilityActive;
   final bool batteryOptGranted;
   final bool overlayGranted;
+  final bool notificationsGranted;
   final List<SaudiLocationItem> allLocations;
   final List<String> avoidWords;
   final List<String> likedWords;
@@ -1450,6 +1555,7 @@ class AdvancedControlScreen extends StatefulWidget {
   final VoidCallback onOpenAccessibilitySettings;
   final VoidCallback onOpenBatterySettings;
   final VoidCallback onOpenOverlaySettings;
+  final VoidCallback onOpenNotificationSettings;
 
   const AdvancedControlScreen({
     super.key,
@@ -1465,6 +1571,7 @@ class AdvancedControlScreen extends StatefulWidget {
     required this.isAccessibilityActive,
     required this.batteryOptGranted,
     required this.overlayGranted,
+    required this.notificationsGranted,
     required this.allLocations,
     required this.avoidWords,
     required this.likedWords,
@@ -1473,6 +1580,7 @@ class AdvancedControlScreen extends StatefulWidget {
     required this.onOpenAccessibilitySettings,
     required this.onOpenBatterySettings,
     required this.onOpenOverlaySettings,
+    required this.onOpenNotificationSettings,
   });
 
   @override
@@ -1494,6 +1602,7 @@ class _AdvancedControlScreenState extends State<AdvancedControlScreen> with Widg
   late bool isAccessibilityActive;
   late bool batteryOptGranted;
   late bool overlayGranted;
+  late bool notificationsGranted;
 
   late List<SaudiLocationItem> allLocations;
   late List<String> avoidWords;
@@ -1515,6 +1624,7 @@ class _AdvancedControlScreenState extends State<AdvancedControlScreen> with Widg
     isAccessibilityActive = widget.isAccessibilityActive;
     batteryOptGranted = widget.batteryOptGranted;
     overlayGranted = widget.overlayGranted;
+    notificationsGranted = widget.notificationsGranted;
 
     allLocations = List<SaudiLocationItem>.from(widget.allLocations);
     avoidWords = List<String>.from(widget.avoidWords);
@@ -1547,11 +1657,13 @@ class _AdvancedControlScreenState extends State<AdvancedControlScreen> with Widg
       final isAcc = await platform.invokeMethod<bool>('isAccessibilityEnabled');
       final isBatt = await platform.invokeMethod<bool>('isBatteryOptExempt');
       final isOver = await platform.invokeMethod<bool>('canDrawOverlays');
+      final isNotif = await platform.invokeMethod<bool>('areNotificationsEnabled');
       if (mounted) {
         setState(() {
           isAccessibilityActive = isAcc ?? false;
           batteryOptGranted = isBatt ?? false;
           overlayGranted = isOver ?? false;
+          notificationsGranted = isNotif ?? true;
         });
       }
     } catch (_) {}
@@ -1853,6 +1965,17 @@ class _AdvancedControlScreenState extends State<AdvancedControlScreen> with Widg
                           widget.onOpenOverlaySettings();
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Display Overlay Settings khul rahi hain...')),
+                          );
+                        },
+                      ),
+                      _buildPermissionCard(
+                        title: 'Notifications',
+                        icon: Icons.notifications_active_rounded,
+                        isGranted: notificationsGranted,
+                        onTap: () {
+                          widget.onOpenNotificationSettings();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Notification Settings khul rahi hain...')),
                           );
                         },
                       ),

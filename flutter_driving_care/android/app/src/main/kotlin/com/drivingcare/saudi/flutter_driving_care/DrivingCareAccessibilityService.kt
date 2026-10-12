@@ -19,6 +19,8 @@ class DrivingCareAccessibilityService : AccessibilityService() {
     companion object {
         const val TAG = "DrivingCareEngine"
         const val PREFS_NAME = "DrivingCarePrefs"
+        const val CHANNEL_ID = "driving_care_autopilot_channel"
+        const val NOTIF_ID = 1001
 
         var isServiceRunning = false
         var instance: DrivingCareAccessibilityService? = null
@@ -26,6 +28,52 @@ class DrivingCareAccessibilityService : AccessibilityService() {
 
     private lateinit var prefs: SharedPreferences
     private var lastActionTime: Long = 0
+
+    fun showStatusNotification(statusText: String) {
+        try {
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = android.app.NotificationChannel(
+                    CHANNEL_ID,
+                    "Driving Care Saudi Autopilot",
+                    android.app.NotificationManager.IMPORTANCE_LOW
+                ).apply {
+                    description = "Driving Care Saudi Ride-Hailing Bot Status"
+                    setShowBadge(false)
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
+
+            val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+            val pendingIntent = if (launchIntent != null) {
+                android.app.PendingIntent.getActivity(
+                    this,
+                    0,
+                    launchIntent,
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) android.app.PendingIntent.FLAG_IMMUTABLE else 0
+                )
+            } else null
+
+            val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                android.app.Notification.Builder(this, CHANNEL_ID)
+            } else {
+                @Suppress("DEPRECATION")
+                android.app.Notification.Builder(this)
+            }
+
+            val notification = builder
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle("Driving Care Saudi 🟢")
+                .setContentText(statusText)
+                .setOngoing(true)
+                .setContentIntent(pendingIntent)
+                .build()
+
+            notificationManager.notify(NOTIF_ID, notification)
+        } catch (e: Exception) {
+            Log.e(TAG, "Notification error: ${e.message}")
+        }
+    }
 
     // Common Ride-Hailing Driver & Captain App Package Names in Saudi Arabia
     private val targetPackageSubstrings = listOf(
@@ -88,17 +136,26 @@ class DrivingCareAccessibilityService : AccessibilityService() {
         instance = this
         prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         Log.d(TAG, "Driving Care Native Accessibility Auto-Clicker Connected & Active!")
+        showStatusNotification("Autopilot Active — Monitoring Jeeny & Ride Requests")
     }
 
     override fun onUnbind(intent: android.content.Intent?): Boolean {
         isServiceRunning = false
         instance = null
+        try {
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            notificationManager.cancel(NOTIF_ID)
+        } catch (e: Exception) {}
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
         isServiceRunning = false
         instance = null
+        try {
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            notificationManager.cancel(NOTIF_ID)
+        } catch (e: Exception) {}
         super.onDestroy()
     }
 

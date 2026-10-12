@@ -95,6 +95,50 @@ class MainActivity : FlutterActivity() {
                         result.error("SETTINGS_ERROR", e.message, null)
                     }
                 }
+                "areNotificationsEnabled" -> {
+                    try {
+                        val notifManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                        val enabled = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                            notifManager.areNotificationsEnabled()
+                        } else {
+                            true
+                        }
+                        result.success(enabled)
+                    } catch (e: Exception) {
+                        result.success(true)
+                    }
+                }
+                "requestNotificationPermission" -> {
+                    try {
+                        if (android.os.Build.VERSION.SDK_INT >= 33) {
+                            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
+                            }
+                        }
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("NOTIF_ERROR", e.message, null)
+                    }
+                }
+                "openNotificationSettings" -> {
+                    try {
+                        val intent = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                        } else {
+                            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.fromParts("package", packageName, null)
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                        }
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("NOTIF_SETTINGS_ERROR", e.message, null)
+                    }
+                }
                 "syncSettings" -> {
                     try {
                         val runAutoEngine = call.argument<Boolean>("runAutoEngine") ?: true
