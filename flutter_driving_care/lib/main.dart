@@ -927,8 +927,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
     }
   }
 
-  // Activate with user-entered key (Pure Offline Ed25519 Cryptographic Verification + Device Binding)
-  // FIX B & FIX C: No server login.php fallback, strict signed DCS keys, device bound.
+  // Activate with user-entered key (Supports both Offline DCS Signed Keys and Online Portal Keys like DC-8891)
   Future<void> _activateWithKey() async {
     final key = _keyController.text.trim();
     if (key.isEmpty) {
@@ -941,20 +940,6 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
       return;
     }
 
-    // 1. FAST OFFLINE VERIFICATION (Ed25519 Cryptographic Signature)
-    final offlineCheck = await DrivingCareCrypto.verifyOfflineKey(key);
-    if (!offlineCheck.isValid) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: const Color(0xFFEF4444),
-          content: Text(offlineCheck.errorMessage),
-        ),
-      );
-      return;
-    }
-
-    // 2. DEVICE BINDING CHECK (Fix B)
     if (currentDeviceId.isEmpty) {
       try {
         currentDeviceId = await platform.invokeMethod<String>('getDeviceId') ?? 'UNKNOWN_DEVICE';
@@ -963,50 +948,149 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
       }
     }
 
-    final cached = await platform.invokeMethod<Map>('loadLicenseCache');
-    final storedBoundKey = cached?['key']?.toString() ?? '';
-    final storedBoundDeviceId = cached?['bound_device_id']?.toString() ?? '';
+    final isSigned = key.startsWith('DCS-') || (key.contains('.') && key.length > 50);
 
-    // If this key was bound on this storage to a different device ID
-    if (storedBoundKey == offlineCheck.key && storedBoundDeviceId.isNotEmpty && storedBoundDeviceId != currentDeviceId) {
+    // 1. FAST OFFLINE VERIFICATION (Ed25519 Cryptographic Signature)
+    if (isSigned) {
+      final offlineCheck = await DrivingCareCrypto.verifyOfflineKey(key);
+      if (!offlineCheck.isValid) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFEF4444),
+            content: Text(offlineCheck.errorMessage),
+          ),
+        );
+        return;
+      }
+
+      // DEVICE BINDING CHECK (Fix B)
+      final cached = await platform.invokeMethod<Map>('loadLicenseCache');
+      final storedBoundKey = cached?['key']?.toString() ?? '';
+      final storedBoundDeviceId = cached?['bound_device_id']?.toString() ?? '';
+
+      // If this key was bound on this storage to a different device ID
+      if (storedBoundKey == offlineCheck.key && storedBoundDeviceId.isNotEmpty && storedBoundDeviceId != currentDeviceId) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Color(0xFFEF4444),
+            content: Text('Ye key kisi aur phone par band hai.'),
+          ),
+        );
+        return;
+      }
+
+      // Save local binding & cache
+      await _saveLicenseCache(
+        key: offlineCheck.key,
+        name: offlineCheck.driverName,
+        days: offlineCheck.daysLeft,
+        boundDeviceId: currentDeviceId,
+      );
+
+      setState(() {
+        isActivated = true;
+        isTrial = false;
+        licenseKey = offlineCheck.key;
+        driverName = offlineCheck.driverName;
+        expiryDisplay = '${offlineCheck.daysLeft} Din Baqi';
+        lockReason = '';
+      });
+      _syncSettingsToNativeService(engineOn: true);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF10B981),
+          content: Text('License Verified! Driving Care Unlocked ✔ (${offlineCheck.driverName})'),
+        ),
+      );
+
+      // Sync device binding and telemetry with server in background
+      _reportSilentTelemetry(offlineCheck.key, offlineCheck.driverName, offlineCheck.daysLeft);
+      return;
+    }
+
+    // 2. SHORT / PORTAL KEY (e.g. DC-8891, BILAL-VIP, DC-NASIR-1111) -> Online Activation via Portal API
+    try {
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+      client.userAgent = 'DrivingCareApp/2.5';
+      final uri = Uri.parse('$serverUrl/api/login.php');
+      final request = await client.postUrl(uri);
+      request.headers.contentType = ContentType.json;
+      request.write(jsonEncode({
+        'key': key,
+        'deviceId': currentDeviceId,
+        'device': 'Android ($currentDeviceId)',
+      }));
+      final response = await request.close();
+      final bodyStr = await response.transform(utf8.decoder).join();
+      final data = jsonDecode(bodyStr);
+
+      if (data is Map && data['success'] == true) {
+        final driverData = data['driver'] is Map ? data['driver'] as Map : data;
+        final name = driverData['name']?.toString() ?? 'Authorized Driver';
+        final days = driverData['daysLeft'] is int ? driverData['daysLeft'] as int : 30;
+        final boundDev = driverData['boundDeviceId']?.toString() ?? '';
+
+        if (boundDev.isNotEmpty && boundDev != currentDeviceId && currentDeviceId.isNotEmpty && currentDeviceId != 'UNKNOWN_DEVICE') {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: Color(0xFFEF4444),
+              content: Text('Ye key kisi aur phone par band hai.'),
+            ),
+          );
+          return;
+        }
+
+        await _saveLicenseCache(
+          key: key,
+          name: name,
+          days: days,
+          boundDeviceId: currentDeviceId,
+        );
+
+        setState(() {
+          isActivated = true;
+          isTrial = false;
+          licenseKey = key;
+          driverName = name;
+          expiryDisplay = '$days Din Baqi';
+          lockReason = '';
+        });
+        _syncSettingsToNativeService(engineOn: true);
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF10B981),
+            content: Text('License Verified! Driving Care Unlocked ✔ ($name)'),
+          ),
+        );
+
+        _reportSilentTelemetry(key, name, days);
+        return;
+      } else {
+        final msg = data is Map ? (data['message']?.toString() ?? 'License key durust nahi hai ya expire ho chuki hai.') : 'Key reject ho gayi.';
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFEF4444),
+            content: Text(msg),
+          ),
+        );
+      }
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Color(0xFFEF4444),
-          content: Text('Ye key kisi aur phone par band hai.'),
+          content: Text('Server se rabta nahi ho saka. Barah-e-karam apna internet check karein ya DCS signed key use karein.'),
         ),
       );
-      return;
     }
-
-    // Save local binding & cache
-    await _saveLicenseCache(
-      key: offlineCheck.key,
-      name: offlineCheck.driverName,
-      days: offlineCheck.daysLeft,
-      boundDeviceId: currentDeviceId,
-    );
-
-    setState(() {
-      isActivated = true;
-      isTrial = false;
-      licenseKey = offlineCheck.key;
-      driverName = offlineCheck.driverName;
-      expiryDisplay = '${offlineCheck.daysLeft} Din Baqi';
-      lockReason = '';
-    });
-    _syncSettingsToNativeService(engineOn: true);
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: const Color(0xFF10B981),
-        content: Text('License Verified! Driving Care Unlocked ✔ (${offlineCheck.driverName})'),
-      ),
-    );
-
-    // Sync device binding and telemetry with server in background
-    _reportSilentTelemetry(offlineCheck.key, offlineCheck.driverName, offlineCheck.daysLeft);
   }
 
   // Start 48-Hour Trial (With countdown & automatic self-destruct lock)
