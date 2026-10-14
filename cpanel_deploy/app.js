@@ -420,6 +420,36 @@ Support WhatsApp: Bilal (+966 53 419 9549)`;
     });
   }
 
+  // FIX B: Reset Bound Device Phone for Driver Key
+  async resetDeviceBinding(key) {
+    if (!confirm(`Driver key ${key} ki Device Binding reset karni hai? Phone badalne ki ijazat mil jayegi.`)) return;
+    try {
+      const res = await fetch('/api/admin_reset_device.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + (this.adminToken || localStorage.getItem('dc_admin_token') || ''),
+          'X-Admin-Token': this.adminToken || localStorage.getItem('dc_admin_token') || ''
+        },
+        body: JSON.stringify({ key })
+      });
+      const data = await res.json();
+      if (data.success) {
+        this.showToast(data.message || `Device binding reset for ${key}!`);
+        const target = this.drivers.find(d => d.key === key);
+        if (target) {
+          target.boundDeviceId = null;
+          this.saveDrivers(this.drivers);
+        }
+        this.render();
+      } else {
+        this.showToast(data.message || 'Error resetting device', 'error');
+      }
+    } catch (e) {
+      this.showToast('Network error while resetting device', 'error');
+    }
+  }
+
   // Copy Key to Clipboard
   copyKey(key) {
     navigator.clipboard.writeText(key).then(() => {
@@ -666,6 +696,9 @@ Support WhatsApp: Bilal (+966 53 419 9549)`;
             <span class="key-code" onclick="portal.copyKey('${d.key}')" title="Click to copy key">
               🔑 ${d.key}
             </span>
+            <div style="font-size: 0.72rem; color: #94a3b8; margin-top: 4px;">
+              📱 Bound: <strong style="color: ${d.boundDeviceId ? '#10b981' : '#f59e0b'}">${d.boundDeviceId ? d.boundDeviceId.substring(0, 12) + '...' : 'Not Bound'}</strong>
+            </div>
           </td>
           <td>
             ${badgeHtml}
@@ -696,6 +729,9 @@ Support WhatsApp: Bilal (+966 53 419 9549)`;
                   🔄 Renew (+30d)
                 </button>
               `}
+              <button class="btn btn-sm btn-outline" onclick="portal.resetDeviceBinding('${d.key}')" title="Reset Bound Device (Phone)" style="color: #fbbf24; border-color: #f59e0b;">
+                🔓 Reset Device
+              </button>
               <button class="btn btn-sm btn-outline" onclick="portal.copyDriverWhatsApp('${d.id}')" title="Copy Ready WhatsApp Message">
                 📋 Send Key
               </button>

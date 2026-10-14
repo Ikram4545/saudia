@@ -1,13 +1,40 @@
 import sys
+import os
+import re
 import json
 import time
 import base64
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
-MASTER_SEED_HEX = "21f7e0b59e44c07d32b47b1aa0f0094e9ce664a45f169a7e8fb84b3eb7b34437"
-MASTER_PUB_HEX  = "4d33b73ef90afd009626442d74ce1d593cd6db64f1d23b83d1ecbcb33a9588e9"
+# Rotated Master Ed25519 Public Key (Verified in client code)
+MASTER_PUB_HEX = "d63f4fcdd57a0c44e3084f0c4cdd74d83864f3f2f1bf3c7c070c561df779627e"
+
+def get_master_seed() -> str:
+    # 1. Check environment variable first
+    env_seed = os.environ.get("DRIVING_CARE_MASTER_SEED")
+    if env_seed and len(env_seed.strip()) == 64:
+        return env_seed.strip()
+    
+    # 2. Check local untracked config file (gitignored)
+    config_path = os.path.join(os.path.dirname(__file__), "cpanel_deploy", "api", "license_keys_config.php")
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                content = f.read()
+                m = re.search(r"['\"]seedHex['\"]\s*=>\s*['\"]([a-fA-F0-9]{64})['\"]", content)
+                if m:
+                    return m.group(1)
+        except Exception:
+            pass
+            
+    raise ValueError(
+        "Master Private Seed not found!\n"
+        "Security Rule: Master seed is never hardcoded in repo files.\n"
+        "Set the DRIVING_CARE_MASTER_SEED environment variable or create untracked cpanel_deploy/api/license_keys_config.php"
+    )
 
 def generate_signed_key(driver_name: str, days: int = 30, custom_key: str = None) -> dict:
+    seed_hex = get_master_seed()
     key_id = custom_key.upper().strip() if custom_key else f"DC-{int(time.time()) % 10000:04d}"
     exp_ms = int((time.time() + (days * 86400)) * 1000)
     
@@ -22,7 +49,7 @@ def generate_signed_key(driver_name: str, days: int = 30, custom_key: str = None
     payload_b64 = base64.b64encode(payload_json.encode('utf-8')).decode('ascii')
     
     # Sign payload_b64 using Ed25519
-    seed_bytes = bytes.fromhex(MASTER_SEED_HEX)
+    seed_bytes = bytes.fromhex(seed_hex)
     priv_key = ed25519.Ed25519PrivateKey.from_private_bytes(seed_bytes)
     sig_bytes = priv_key.sign(payload_b64.encode('utf-8'))
     sig_b64 = base64.b64encode(sig_bytes).decode('ascii')

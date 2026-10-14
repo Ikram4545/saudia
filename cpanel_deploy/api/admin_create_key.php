@@ -14,8 +14,9 @@ $days = intval($data['days'] ?? 30);
 $name = trim($data['name'] ?? 'New Saudi Driver');
 $client_ip = get_client_ip();
 
-// Master Ed25519 Seed (Hex) for offline signature
-$seedHex = '21f7e0b59e44c07d32b47b1aa0f0094e9ce664a45f169a7e8fb84b3eb7b34437';
+// Load Master Ed25519 Private Key Seed from server configuration (untracked)
+$keysConfig = file_exists(__DIR__ . '/license_keys_config.php') ? require(__DIR__ . '/license_keys_config.php') : [];
+$seedHex = $keysConfig['seedHex'] ?? getenv('ED25519_PRIVATE_SEED');
 $signedKey = null;
 
 if (function_exists('sodium_crypto_sign_seed_keypair')) {

@@ -9,8 +9,9 @@ $data = json_decode($body, true) ?? [];
 $rawKey = trim($data['key'] ?? '');
 $cleanKey = strtoupper($rawKey);
 $normalizedKey = preg_replace('/[^A-Z0-9]/', '', $cleanKey);
-$device = $data['device'] ?? 'Android Mobile';
-$driverName = $data['driverName'] ?? '';
+$deviceId = trim($data['deviceId'] ?? '');
+$device = $data['device'] ?? (!empty($deviceId) ? "Android ($deviceId)" : 'Android Mobile');
+$driverName = trim($data['driverName'] ?? '');
 $client_ip = get_client_ip();
 
 $db = get_db();
@@ -33,6 +34,22 @@ if (!empty($cleanKey)) {
         }
 
         if ($isMatch) {
+            // FIX B: Device Binding Verification
+            $existingBoundId = trim($driver['boundDeviceId'] ?? '');
+            if (!empty($existingBoundId) && !empty($deviceId) && $existingBoundId !== $deviceId) {
+                echo json_encode([
+                    'success' => false,
+                    'error' => 'device_mismatch',
+                    'message' => 'Ye key kisi aur phone par band hai.'
+                ]);
+                exit;
+            }
+
+            // Bind device if not yet bound
+            if (empty($existingBoundId) && !empty($deviceId)) {
+                $driver['boundDeviceId'] = $deviceId;
+            }
+
             $driver['online'] = true;
             $driver['lastPing'] = date('c');
             $driver['ip'] = $client_ip;
@@ -56,7 +73,8 @@ if (!$found && !empty($driverName) && !empty($cleanKey)) {
         'online' => true,
         'lastPing' => date('c'),
         'ip' => $client_ip,
-        'device' => $device
+        'device' => $device,
+        'boundDeviceId' => !empty($deviceId) ? $deviceId : null,
     ];
     $db['drivers'][] = $newRecord;
     array_unshift($db['logs'], [
@@ -77,10 +95,12 @@ if ($found) {
         'success' => true,
         'status' => $found['status'],
         'daysLeft' => $found['daysLeft'],
+        'boundDeviceId' => $found['boundDeviceId'] ?? null,
         'driver' => [
             'name' => $found['name'],
             'key' => $found['key'],
-            'status' => $found['status']
+            'status' => $found['status'],
+            'boundDeviceId' => $found['boundDeviceId'] ?? null
         ]
     ]);
 } else {

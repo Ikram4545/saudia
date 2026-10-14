@@ -191,6 +191,14 @@ class MainActivity : FlutterActivity() {
                         result.error("NOTIF_SETTINGS_ERROR", e.message, null)
                     }
                 }
+                "getDeviceId" -> {
+                    try {
+                        val androidId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: "UNKNOWN_DEVICE"
+                        result.success(androidId)
+                    } catch (e: Exception) {
+                        result.success("UNKNOWN_DEVICE")
+                    }
+                }
                 "syncSettings" -> {
                     try {
                         val runAutoEngine = call.argument<Boolean>("runAutoEngine") ?: true
@@ -238,12 +246,16 @@ class MainActivity : FlutterActivity() {
                         val key = call.argument<String>("key") ?: ""
                         val name = call.argument<String>("name") ?: "Driver"
                         val days = call.argument<Int>("days") ?: 30
+                        val boundDeviceId = call.argument<String>("bound_device_id") ?: ""
                         val prefs = getSharedPreferences("DrivingCareLicenseCache", Context.MODE_PRIVATE)
                         prefs.edit().apply {
                             putString("key", key)
                             putString("name", name)
                             putInt("days", days)
                             putLong("savedAt", System.currentTimeMillis())
+                            if (boundDeviceId.isNotEmpty()) {
+                                putString("bound_device_id", boundDeviceId)
+                            }
                             apply()
                         }
                         result.success(true)
@@ -261,6 +273,7 @@ class MainActivity : FlutterActivity() {
                             map["name"] = prefs.getString("name", "Driver") ?: "Driver"
                             map["days"] = prefs.getInt("days", 30)
                             map["savedAt"] = prefs.getLong("savedAt", 0L)
+                            map["bound_device_id"] = prefs.getString("bound_device_id", "") ?: ""
                             result.success(map)
                         } else {
                             result.success(null)

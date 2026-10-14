@@ -178,15 +178,30 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
   final String devPhone = '03113154649';
 
   final List<Map<String, dynamic>> orderHistory = [];
+  String currentDeviceId = '';
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _initDeviceId();
     _loadCachedLicense();
     _checkAllPermissions();
     _startTimers();
     _syncSettingsToNativeService(engineOn: true);
+  }
+
+  Future<void> _initDeviceId() async {
+    try {
+      final id = await platform.invokeMethod<String>('getDeviceId');
+      if (id != null && id.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            currentDeviceId = id;
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   @override
@@ -297,13 +312,31 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
   Future<void> _loadCachedLicense() async {
     try {
+      if (currentDeviceId.isEmpty) {
+        try {
+          currentDeviceId = await platform.invokeMethod<String>('getDeviceId') ?? 'UNKNOWN_DEVICE';
+        } catch (_) {
+          currentDeviceId = 'UNKNOWN_DEVICE';
+        }
+      }
       final result = await platform.invokeMethod<Map>('loadLicenseCache');
       if (result != null && result['key'] != null) {
         final key = result['key'].toString();
         final name = result['name']?.toString() ?? 'Driver';
         final days = result['days'] is int ? result['days'] as int : 30;
         final savedAt = result['savedAt'] is int ? result['savedAt'] as int : 0;
-        
+        final boundDevId = result['bound_device_id']?.toString() ?? '';
+
+        if (boundDevId.isNotEmpty && currentDeviceId.isNotEmpty && boundDevId != currentDeviceId) {
+          if (mounted) {
+            setState(() {
+              isActivated = false;
+              lockReason = 'Ye key kisi aur phone par band hai.';
+            });
+          }
+          return;
+        }
+
         final elapsedDays = savedAt > 0 ? ((DateTime.now().millisecondsSinceEpoch - savedAt) / (86400 * 1000)).floor() : 0;
         final remaining = days - elapsedDays;
         
@@ -322,19 +355,27 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
     } catch (_) {}
   }
 
-  Future<void> _saveLicenseCache({required String key, required String name, required int days}) async {
+  Future<void> _saveLicenseCache({required String key, required String name, required int days, String boundDeviceId = ''}) async {
     try {
       await platform.invokeMethod('saveLicenseCache', {
         'key': key,
         'name': name,
         'days': days,
+        'bound_device_id': boundDeviceId.isNotEmpty ? boundDeviceId : currentDeviceId,
       });
     } catch (_) {}
   }
 
   Future<void> _reportSilentTelemetry(String key, String name, int days) async {
     try {
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
+      if (currentDeviceId.isEmpty) {
+        try {
+          currentDeviceId = await platform.invokeMethod<String>('getDeviceId') ?? 'UNKNOWN_DEVICE';
+        } catch (_) {
+          currentDeviceId = 'UNKNOWN_DEVICE';
+        }
+      }
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
       client.userAgent = 'DrivingCareApp/2.4';
       final uri = Uri.parse('$serverUrl/api/ping');
       final request = await client.postUrl(uri);
@@ -343,9 +384,31 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
         'key': key,
         'driverName': name,
         'daysLeft': days,
-        'device': 'Android Mobile Driver',
+        'deviceId': currentDeviceId,
+        'device': 'Android ($currentDeviceId)',
       }));
-      await request.close();
+      final response = await request.close();
+      final bodyStr = await response.transform(utf8.decoder).join();
+      final data = jsonDecode(bodyStr);
+
+      if (mounted && data is Map) {
+        if (data['success'] == false && data['error'] == 'device_mismatch') {
+          setState(() {
+            isActivated = false;
+            lockReason = data['message'] ?? 'Ye key kisi aur phone par band hai.';
+          });
+          _syncSettingsToNativeService(engineOn: false);
+          try {
+            platform.invokeMethod('clearLicenseCache');
+          } catch (_) {}
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: const Color(0xFFEF4444),
+              content: Text(data['message'] ?? 'Ye key kisi aur phone par band hai.'),
+            ),
+          );
+        }
+      }
     } catch (_) {}
   }
 
@@ -681,16 +744,36 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
       final uri = Uri.parse('$serverUrl/api/ping');
       final request = await client.postUrl(uri);
       request.headers.contentType = ContentType.json;
+      if (currentDeviceId.isEmpty) {
+        try {
+          currentDeviceId = await platform.invokeMethod<String>('getDeviceId') ?? 'UNKNOWN_DEVICE';
+        } catch (_) {
+          currentDeviceId = 'UNKNOWN_DEVICE';
+        }
+      }
       request.write(jsonEncode({
         'key': licenseKey,
         'driverName': driverName,
-        'device': 'Android Mobile Driver',
+        'deviceId': currentDeviceId,
+        'device': 'Android ($currentDeviceId)',
       }));
       final response = await request.close();
       final bodyStr = await response.transform(utf8.decoder).join();
       final data = jsonDecode(bodyStr);
 
-      if (mounted) {
+      if (mounted && data is Map) {
+        if (data['success'] == false && data['error'] == 'device_mismatch') {
+          setState(() {
+            isActivated = false;
+            lockReason = data['message'] ?? 'Ye key kisi aur phone par band hai.';
+          });
+          _syncSettingsToNativeService(engineOn: false);
+          try {
+            platform.invokeMethod('clearLicenseCache');
+          } catch (_) {}
+          return;
+        }
+
         if (response.statusCode == 200 && data['success'] == true) {
           final status = (data['status'] ?? 'active').toString().toLowerCase();
           if (status == 'blocked' || status == 'suspended' || status == 'inactive') {
@@ -722,7 +805,8 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
     }
   }
 
-  // Activate with user-entered key (Fast Offline Ed25519 Verification + Fallback)
+  // Activate with user-entered key (Pure Offline Ed25519 Cryptographic Verification + Device Binding)
+  // FIX B & FIX C: No server login.php fallback, strict signed DCS keys, device bound.
   Future<void> _activateWithKey() async {
     final key = _keyController.text.trim();
     if (key.isEmpty) {
@@ -735,87 +819,72 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
       return;
     }
 
-    // 1. FAST OFFLINE VERIFICATION (Ed25519 & Pre-Authorized Whitelist - Works in Airplane Mode)
+    // 1. FAST OFFLINE VERIFICATION (Ed25519 Cryptographic Signature)
     final offlineCheck = await DrivingCareCrypto.verifyOfflineKey(key);
-    if (offlineCheck.isValid) {
-      setState(() {
-        isActivated = true;
-        isTrial = false;
-        licenseKey = offlineCheck.key;
-        driverName = offlineCheck.driverName;
-        expiryDisplay = '${offlineCheck.daysLeft} Din Baqi';
-        lockReason = '';
-      });
-      _saveLicenseCache(key: offlineCheck.key, name: offlineCheck.driverName, days: offlineCheck.daysLeft);
-      _syncSettingsToNativeService(engineOn: true);
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: const Color(0xFF10B981),
-          content: Text('License Verified! Driving Care Unlocked ✔ (${offlineCheck.driverName})'),
-        ),
-      );
-
-      // Silent telemetry report in background (Fire & Forget, does NOT block activation)
-      _reportSilentTelemetry(offlineCheck.key, offlineCheck.driverName, offlineCheck.daysLeft);
-      return;
-    }
-
-    // 2. Fallback to Online Server Verification if key was generated dynamically
-    try {
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
-      client.userAgent = 'DrivingCareApp/2.4';
-      final uri = Uri.parse('$serverUrl/api/login');
-      final request = await client.postUrl(uri);
-      request.headers.contentType = ContentType.json;
-      request.write(jsonEncode({
-        'key': key,
-        'device': 'Android Mobile Driver',
-      }));
-      final response = await request.close();
-      final bodyStr = await response.transform(utf8.decoder).join();
-      final data = jsonDecode(bodyStr);
-
-      if (!mounted) return;
-      if (response.statusCode == 200 && data['success'] == true) {
-        final days = data['driver']?['daysLeft'] ?? 30;
-        final name = data['driver']?['name'] ?? 'Authorized Driver';
-        setState(() {
-          isActivated = true;
-          isTrial = false;
-          licenseKey = key.toUpperCase();
-          driverName = name;
-          expiryDisplay = '$days Din Baqi';
-          lockReason = '';
-        });
-        _saveLicenseCache(key: key.toUpperCase(), name: name, days: days);
-        _syncSettingsToNativeService(engineOn: true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: Color(0xFF10B981),
-            content: Text('License Verified! Driving Care Unlocked ✔'),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: const Color(0xFFEF4444),
-            content: Text(data['message'] ?? 'Invalid License Key! Developer Ikram se rabta karein.'),
-          ),
-        );
-      }
-    } catch (e) {
+    if (!offlineCheck.isValid) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: const Color(0xFFEF4444),
-          content: Text(offlineCheck.errorMessage.isNotEmpty
-              ? offlineCheck.errorMessage
-              : 'Server se rabta nahi ho saka. Baraye meherbani internet check karein.'),
+          content: Text(offlineCheck.errorMessage),
         ),
       );
+      return;
     }
+
+    // 2. DEVICE BINDING CHECK (Fix B)
+    if (currentDeviceId.isEmpty) {
+      try {
+        currentDeviceId = await platform.invokeMethod<String>('getDeviceId') ?? 'UNKNOWN_DEVICE';
+      } catch (_) {
+        currentDeviceId = 'UNKNOWN_DEVICE';
+      }
+    }
+
+    final cached = await platform.invokeMethod<Map>('loadLicenseCache');
+    final storedBoundKey = cached?['key']?.toString() ?? '';
+    final storedBoundDeviceId = cached?['bound_device_id']?.toString() ?? '';
+
+    // If this key was bound on this storage to a different device ID
+    if (storedBoundKey == offlineCheck.key && storedBoundDeviceId.isNotEmpty && storedBoundDeviceId != currentDeviceId) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFFEF4444),
+          content: Text('Ye key kisi aur phone par band hai.'),
+        ),
+      );
+      return;
+    }
+
+    // Save local binding & cache
+    await _saveLicenseCache(
+      key: offlineCheck.key,
+      name: offlineCheck.driverName,
+      days: offlineCheck.daysLeft,
+      boundDeviceId: currentDeviceId,
+    );
+
+    setState(() {
+      isActivated = true;
+      isTrial = false;
+      licenseKey = offlineCheck.key;
+      driverName = offlineCheck.driverName;
+      expiryDisplay = '${offlineCheck.daysLeft} Din Baqi';
+      lockReason = '';
+    });
+    _syncSettingsToNativeService(engineOn: true);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFF10B981),
+        content: Text('License Verified! Driving Care Unlocked ✔ (${offlineCheck.driverName})'),
+      ),
+    );
+
+    // Sync device binding and telemetry with server in background
+    _reportSilentTelemetry(offlineCheck.key, offlineCheck.driverName, offlineCheck.daysLeft);
   }
 
   // Start 48-Hour Trial (With countdown & automatic self-destruct lock)
