@@ -150,6 +150,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
   // Supported packages for Driver Auto-Launch
   static const List<String> jeenyPackages = [
+    'me.com.easytaxista',
     'me.jeeny.driver',
     'com.jeeny.driver',
     'me.jeeny.captain',
@@ -635,7 +636,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
         ? 'com.ubercab.driver'
         : platformName == 'Bolt'
             ? 'ee.mtakso.driver'
-            : 'me.jeeny.driver';
+            : 'me.com.easytaxista';
 
     showDialog(
       context: context,

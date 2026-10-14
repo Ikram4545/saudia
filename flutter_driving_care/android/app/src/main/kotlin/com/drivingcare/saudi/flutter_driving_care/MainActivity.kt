@@ -128,7 +128,7 @@ class MainActivity : FlutterActivity() {
                     }
                 }
                 "openPlayStore" -> {
-                    val pkg = call.argument<String>("package") ?: "me.jeeny.driver"
+                    val pkg = call.argument<String>("package") ?: "me.com.easytaxista"
                     try {
                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$pkg")).apply {
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

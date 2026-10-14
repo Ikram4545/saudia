@@ -44,6 +44,7 @@ class DrivingCareNotificationListener : NotificationListenerService() {
 
     // Exact driver-app packages (mirrors the Dart jeenyPackages/uberPackages/boltPackages lists)
     private val targetPackages = setOf(
+        "me.com.easytaxista",
         "me.jeeny.driver",
         "com.jeeny.driver",
         "me.jeeny.captain",
