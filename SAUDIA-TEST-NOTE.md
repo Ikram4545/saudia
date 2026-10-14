@@ -5,7 +5,7 @@
 **Region:** Kingdom of Saudi Arabia (Riyadh, Jeddah, Dammam, Mecca, Medina)  
 **Lead Developer:** Ikram (WhatsApp: 03113154649)  
 **Client / Owner:** Bilal (+966 53 419 9549)  
-**Release Version:** v2.4 (Production Hardened)
+**Release Version:** v2.4.0 (Production Hardened)
 
 ---
 
@@ -67,18 +67,18 @@ Saudi firewall and ISP network fluctuations frequently caused temporary network 
 
 ### New Architecture:
 1. **Ed25519 Cryptographic Signatures:**
-   - Keys signed using Master Ed25519 private key seed.
-   - Public Key embedded in Flutter client: `4d33b73ef90afd009626442d74ce1d593cd6db64f1d23b83d1ecbcb33a9588e9`.
+   - Keys signed using Master Ed25519 private key seed on server (rotated).
+   - Dual Public Keys verified locally in Flutter client:
+     - Rotated Master Key: `ca9aff6928e1b296b24d83589758128c5b6be2c1a555f1da3dfa72f1c3f63937`
+     - Transition Legacy Key: `4d33b73ef90afd009626442d74ce1d593cd6db64f1d23b83d1ecbcb33a9588e9`
    - Verified 100% locally on the driver's phone with zero network connection required.
    - Works fully in **Airplane Mode**.
-2. **Pre-Authorized VIP Whitelist:**
-   - `DC-NASIR-11` (Nasir)
-   - `DC-NASIR-1111` (Nasir)
-   - `DC-7300` (Nasir-hussain)
-   - `DC-8921` (Tariq Al-Harbi)
-   - `IKRAM-VIP` (Ikram Master Admin)
-   - `BILAL-VIP` (Bilal Owner Admin)
-   - `ADNAN-VIP` (Adnan Driver)
+2. **Pre-Authorized Testing Whitelist & Placeholders:**
+   - `DC-NASIR-11` (Nasir Demo Whitelist)
+   - `DC-DEMO-001` (Driver Demo Placeholder)
+   - `DC-DEMO-002` (Driver Demo Placeholder)
+   - `IKRAM-VIP` (Ikram Admin Demo)
+   - `BILAL-VIP` (Bilal Owner Demo)
 3. **Grace Period & Non-Blocking Telemetry:**
    - When network drops or server is unreachable, app enters 24-48h grace period and **NEVER locks the engine**.
    - Lock only triggers if server returns explicit HTTP 200 with `status: blocked` or `status: suspended`.

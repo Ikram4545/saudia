@@ -95,17 +95,69 @@ class MainActivity : FlutterActivity() {
                         result.error("SETTINGS_ERROR", e.message, null)
                     }
                 }
+                "launchPackage" -> {
+                    val pkg = call.argument<String>("package")
+                    if (pkg.isNullOrEmpty()) {
+                        result.success(false)
+                    } else {
+                        try {
+                            val launchIntent = packageManager.getLaunchIntentForPackage(pkg)
+                            if (launchIntent != null) {
+                                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                startActivity(launchIntent)
+                                result.success(true)
+                            } else {
+                                result.success(false)
+                            }
+                        } catch (e: Exception) {
+                            result.success(false)
+                        }
+                    }
+                }
+                "isPackageInstalled" -> {
+                    val pkg = call.argument<String>("package")
+                    if (pkg.isNullOrEmpty()) {
+                        result.success(false)
+                    } else {
+                        try {
+                            packageManager.getPackageInfo(pkg, 0)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.success(false)
+                        }
+                    }
+                }
+                "openPlayStore" -> {
+                    val pkg = call.argument<String>("package") ?: "me.jeeny.driver"
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$pkg")).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        try {
+                            val fallback = Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$pkg")).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            startActivity(fallback)
+                            result.success(true)
+                        } catch (e2: Exception) {
+                            result.success(false)
+                        }
+                    }
+                }
                 "areNotificationsEnabled" -> {
                     try {
                         val notifManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
                         val enabled = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
                             notifManager.areNotificationsEnabled()
                         } else {
-                            true
+                            false
                         }
                         result.success(enabled)
                     } catch (e: Exception) {
-                        result.success(true)
+                        result.success(false)
                     }
                 }
                 "requestNotificationPermission" -> {

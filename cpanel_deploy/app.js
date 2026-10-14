@@ -326,7 +326,6 @@ class DrivingCarePortal {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Admin-Password': 'Ikram445@@',
         'X-Admin-Token': this.adminToken || localStorage.getItem('dc_admin_token') || ''
       },
       body: JSON.stringify({ name, phone, city, key, days: 30 })
@@ -384,7 +383,6 @@ class DrivingCarePortal {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Admin-Password': 'Ikram445@@',
             'X-Admin-Token': this.adminToken || localStorage.getItem('dc_admin_token') || ''
           },
           body: JSON.stringify({ key: driver.key })

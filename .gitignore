@@ -1,0 +1,23 @@
+*.apk
+*.zip
+*.idsig
+flutter_driving_care/build/
+.dart_tool/
+.gradle/
+
+# Keystores & Signing Secrets
+*.keystore
+*.jks
+**/key.properties
+
+# Server-side Secrets & Configs
+**/admin_config.php
+**/license_keys_config.php
+**/driving_care_db.json
+
+# Media & Scratch Files
+*.mp4
+*.ogg
+*.mp3
+__pycache__/
+extracted_frames/

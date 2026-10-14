@@ -58,6 +58,12 @@
 
          In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
+        <package android:name="me.jeeny.driver" />
+        <package android:name="com.jeeny.driver" />
+        <package android:name="me.jeeny.captain" />
+        <package android:name="com.easytaxi.driver" />
+        <package android:name="com.ubercab.driver" />
+        <package android:name="ee.mtakso.driver" />
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>

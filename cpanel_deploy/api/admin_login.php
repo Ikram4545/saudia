@@ -9,12 +9,13 @@ $data = json_decode($body, true) ?? [];
 $username = strtolower(trim($data['username'] ?? ''));
 $password = trim($data['password'] ?? '');
 
-$valid_users = ['ikram', 'bilal', 'admin'];
+$creds = get_admin_credentials();
+$valid_users = $creds['allowed_users'] ?? ['ikramadmin', 'ikram', 'bilal', 'admin'];
 
-// Strict Master Password: Ikram445@@
-if (in_array($username, $valid_users) && ($password === 'Ikram445@@' || $password === 'ikram445@@')) {
+if (in_array($username, $valid_users) && (hash_equals($creds['password'], $password) || $password === $creds['password'])) {
     // Generate secure token
-    $token = hash('sha256', 'driving_care_master_Ikram445@@_' . date('Y-m-d'));
+    $salt = $creds['secret_salt'] ?? 'dc_secure_salt_saudia_2026';
+    $token = hash('sha256', 'driving_care_master_' . $salt . '_' . date('Y-m-d'));
     
     $db = get_db();
     $client_ip = get_client_ip();

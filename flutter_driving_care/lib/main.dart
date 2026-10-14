@@ -135,7 +135,20 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
   bool isAccessibilityActive = false;
   bool batteryOptGranted = false;
   bool overlayGranted = false;
-  bool notificationsGranted = true;
+  bool notificationsGranted = false; // Honesty fix: initialized to false
+
+  bool _hasAutoLaunchedJeeny = false;
+  bool _openedAccessibilitySettingsOnce = false;
+
+  // Supported packages for Driver Auto-Launch
+  static const List<String> jeenyPackages = [
+    'me.jeeny.driver',
+    'com.jeeny.driver',
+    'me.jeeny.captain',
+    'com.easytaxi.driver',
+  ];
+  static const List<String> uberPackages = ['com.ubercab.driver'];
+  static const List<String> boltPackages = ['ee.mtakso.driver'];
 
   // Saudi Blocked Locations
   final List<SaudiLocationItem> allLocations = [
@@ -188,7 +201,12 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _checkAllPermissions();
+      _checkAllPermissions().then((_) {
+        if (_openedAccessibilitySettingsOnce && !isAccessibilityActive) {
+          _openedAccessibilitySettingsOnce = false;
+          _showRestrictedSettingsGuideDialog();
+        }
+      });
     }
   }
 
@@ -199,6 +217,17 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
       _checkOverlayStatus(),
       _checkNotificationStatus(),
     ]);
+
+    if (!mounted) return;
+
+    final allGreen = isAccessibilityActive && batteryOptGranted && overlayGranted && notificationsGranted;
+    if (allGreen && isActivated && !_hasAutoLaunchedJeeny) {
+      _hasAutoLaunchedJeeny = true;
+      // Trigger site 1: Jeeny Auto-Launch via launchPackage when all permissions become green
+      _launchTargetDriverApp();
+    } else if (!allGreen) {
+      _hasAutoLaunchedJeeny = false;
+    }
   }
 
   Future<void> _checkBatteryOptStatus() async {
@@ -228,10 +257,16 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
       final bool? enabled = await platform.invokeMethod<bool>('areNotificationsEnabled');
       if (mounted) {
         setState(() {
-          notificationsGranted = enabled ?? true;
+          notificationsGranted = enabled ?? false; // Honesty fix: default to false
         });
       }
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          notificationsGranted = false;
+        });
+      }
+    }
   }
 
   Future<void> _requestNotificationPermission() async {
@@ -362,6 +397,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
   // Open native Android settings for accessibility
   Future<void> _openNativeAccessibilitySettings() async {
+    _openedAccessibilitySettingsOnce = true;
     try {
       await platform.invokeMethod('openAccessibilitySettings');
     } catch (_) {}
@@ -372,6 +408,217 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
     try {
       await platform.invokeMethod('openAppDetailsSettings');
     } catch (_) {}
+  }
+
+  // Launch Target Ride-Hailing Driver App (Jeeny, Uber, Bolt)
+  Future<bool> _launchTargetDriverApp({bool isManual = false}) async {
+    List<String> pkgs = jeenyPackages;
+    String targetName = 'Jeeny';
+    if (!jeenySelected && uberSelected) {
+      pkgs = uberPackages;
+      targetName = 'Uber';
+    } else if (!jeenySelected && !uberSelected && boltSelected) {
+      pkgs = boltPackages;
+      targetName = 'Bolt';
+    }
+
+    for (final pkg in pkgs) {
+      try {
+        final success = await platform.invokeMethod<bool>('launchPackage', {'package': pkg});
+        if (success == true) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('$targetName Driver App khol di gayi hai 🚀'),
+                backgroundColor: const Color(0xFF10B981),
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+          return true;
+        }
+      } catch (_) {}
+    }
+
+    if (mounted) {
+      _showAppNotInstalledDialog(targetName);
+    }
+    return false;
+  }
+
+  void _showAppNotInstalledDialog(String platformName) {
+    final defaultPkg = platformName == 'Uber'
+        ? 'com.ubercab.driver'
+        : platformName == 'Bolt'
+            ? 'ee.mtakso.driver'
+            : 'me.jeeny.driver';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 28),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text('$platformName App Nahi Mili', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
+          ],
+        ),
+        content: Text(
+          'Aapke mobile mein $platformName Driver App install nahi mili ya package detect nahi ho saka.\n\nPlay Store se $platformName install karein ya confirm karein.',
+          style: const TextStyle(fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0F172A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            icon: const Icon(Icons.shop_rounded, size: 18),
+            label: const Text('Play Store Kholein'),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await platform.invokeMethod('openPlayStore', {'package': defaultPkg});
+              } catch (_) {}
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRestrictedSettingsGuideDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.security_update_warning_rounded, color: Color(0xFFEF4444), size: 28),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Accessibility "Restricted" Hai?',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Android 13/14 par download ki hui apps mein Accessibility pehle block hoti hai ("Restricted setting"). Isko theek karne ka asaan tareeqa:',
+                style: TextStyle(fontSize: 13, height: 1.4, color: Color(0xFF334155)),
+              ),
+              const SizedBox(height: 12),
+              _guideStep(1, 'Neeche "App Info Kholein" dabayein.'),
+              _guideStep(2, 'Upar right kone mein 3 dots (⋮) par tap karein.'),
+              _guideStep(3, '"Allow restricted settings" par tap karke phone lock/fingerprint verify karein.'),
+              _guideStep(4, 'Wapas Accessibility mein ja kar "Driving Care" ko ON karein.'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Samajh Gaya', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            icon: const Icon(Icons.info_outline, size: 18),
+            label: const Text('App Info Kholein'),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _openAppDetailsSettings();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _guideStep(int number, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 11,
+            backgroundColor: const Color(0xFFEF4444),
+            child: Text('$number', style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)))),
+        ],
+      ),
+    );
+  }
+
+  void _toggleEngineSwitch() {
+    if (runAutoEngine) {
+      setState(() {
+        runAutoEngine = false;
+      });
+      _syncSettingsToNativeService(engineOn: false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Auto Engine PAUSED')),
+      );
+      return;
+    }
+
+    // Sequence check for missing permissions before turning ON
+    if (!isAccessibilityActive) {
+      _openNativeAccessibilitySettings();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pehle Accessibility Service ON karein.')),
+      );
+      return;
+    }
+    if (!batteryOptGranted) {
+      _openBatterySettings();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Battery Optimization Unrestricted karein.')),
+      );
+      return;
+    }
+    if (!overlayGranted) {
+      _openOverlaySettings();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Display Overlay permission allow karein.')),
+      );
+      return;
+    }
+    if (!notificationsGranted) {
+      _openNotificationSettings();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Notifications permission allow karein.')),
+      );
+      return;
+    }
+
+    setState(() {
+      runAutoEngine = true;
+    });
+    _syncSettingsToNativeService(engineOn: true);
+    // Trigger site 2: Jeeny Auto-Launch via launchPackage when engine is switched ON
+    _launchTargetDriverApp(isManual: true);
   }
 
   // Push filter rules to native Kotlin service
@@ -712,6 +959,10 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
       });
       // Immediately push updated rules to native Android Accessibility Service!
       _syncSettingsToNativeService();
+      if (runAutoEngine && isAccessibilityActive && batteryOptGranted && overlayGranted && notificationsGranted) {
+        // Trigger site 2b: Jeeny Auto-Launch via launchPackage when settings applied with engine active
+        _launchTargetDriverApp(isManual: true);
+      }
     }
   }
 
@@ -724,9 +975,25 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Driving Care',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+        title: Row(
+          children: [
+            const Text(
+              'Driving Care',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 19),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Text(
+                'v2.4.0',
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+            ),
+          ],
         ),
         actions: [
           IconButton(
@@ -1082,20 +1349,39 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
                       'Live Engine & Permissions Status',
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: runAutoEngine
-                            ? const Color(0xFF10B981).withOpacity(0.12)
-                            : const Color(0xFFEF4444).withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        runAutoEngine ? 'ENGINE ACTIVE' : 'ENGINE PAUSED',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: runAutoEngine ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                    InkWell(
+                      onTap: _toggleEngineSwitch,
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: runAutoEngine
+                              ? const Color(0xFF10B981).withOpacity(0.12)
+                              : const Color(0xFFEF4444).withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: runAutoEngine ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              runAutoEngine ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                              size: 14,
+                              color: runAutoEngine ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              runAutoEngine ? 'ENGINE ACTIVE' : 'ENGINE PAUSED',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: runAutoEngine ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -1125,6 +1411,20 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
                             textAlign: TextAlign.center,
                             style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
                           ),
+                          if (!isAccessibilityActive) ...[
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFDC2626),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'ON karein ➔',
+                                style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -1219,10 +1519,10 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
                 children: [
                   const Icon(Icons.notifications_off_rounded, color: Color(0xFFDC2626), size: 22),
                   const SizedBox(width: 10),
-                  Expanded(
+                  const Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
+                      children: [
                         Text(
                           'Notifications Blocked Hain!',
                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF991B1B)),
@@ -1663,7 +1963,7 @@ class _AdvancedControlScreenState extends State<AdvancedControlScreen> with Widg
           isAccessibilityActive = isAcc ?? false;
           batteryOptGranted = isBatt ?? false;
           overlayGranted = isOver ?? false;
-          notificationsGranted = isNotif ?? true;
+          notificationsGranted = isNotif ?? false; // Honesty fix: default to false
         });
       }
     } catch (_) {}

@@ -62,34 +62,35 @@ The hosting server's LiteSpeed / ModSecurity web application firewall was interc
 ### 3. Bulletproof Admin Key Synchronization
 Previously, creating a driver in the Admin Web Portal saved to browser `localStorage` but skipped the server API when the admin token was uninitialized.
 **Resolution**:
-- Updated `admin.html` and `app.js` to ensure session credentials (`X-Admin-Password: Ikram445@@` and persistent admin tokens) are attached to all key generation and deletion requests.
-- All drivers created in the Admin Portal are guaranteed to sync to `driving_care_db.json` on the live server.
+- Updated `admin.html` and `app.js` to ensure session authentication tokens are attached to all key generation and deletion requests.
+- All drivers created in the Admin Portal are guaranteed to sync to the server database.
 
 ---
 
 ## Credentials & Access
-- **Admin Portal**: `https://saudia.pixeltrio.com/admin`
-- **Master Admin Username**: `Ikram`
-- **Master Admin Password**: `Ikram445@@`
-- **APK Download**: `https://saudia.pixeltrio.com/download.php`
+- **Admin Portal**: `https://saudia.pixeltrio.com/admin.html`
+- **Authentication**: Managed securely via server-side configuration (`admin_config.php`) with zero public credentials exposed in repository.
+- **APK Download Page**: `https://saudia.pixeltrio.com/download.php`
 - **Direct APK**: `https://saudia.pixeltrio.com/DrivingCare.apk`
 
 ---
 
-## Latest Release & Commit Info (Fresh 14 October 2026)
-- **Release Version**: Driving Care v2.4 (Production Release)
+## Latest Release & Commit Info (Production Clean 14 October 2026)
+- **Release Version**: Driving Care v2.4.0 (Production Release)
 - **Date**: 14 October 2026
-- **APK File**: `Driving_Care_v2.4_Production.apk` (22.08 MB)
+- **App Source**: `flutter_driving_care/` (Single Source of Truth)
+- **APK File**: `DrivingCare.apk` (Version `2.4.0+5`)
 - **Official Live Download**: `https://saudia.pixeltrio.com/download.html`
 - **Direct Download Link**: `https://saudia.pixeltrio.com/DrivingCare.apk`
-- **Official Keystore**: `driving_care.keystore` (Alias: `drivingcare`)
 - **Key Updates**:
-  1. Real Battery Optimization Permission (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`)
-  2. Real System Overlay Permission (`SYSTEM_ALERT_WINDOW`)
-  3. Real Android 13/14 Notifications Permission (`POST_NOTIFICATIONS`) + Persistent Foreground Status Bar Notification
-  4. Test Mode & Test Order Overlay completely purged
-  5. Offline Ed25519 Cryptographic Licensing (`license_crypto.dart`) + Nasir Offline Whitelist (`DC-NASIR-11`)
-  6. Heartbeat Grace Period (Never auto-locks on network timeout / drop)
-  7. Android 13/14 Restricted Settings 1-Tap Bypass to App Info
-  8. Startup crash resolved by retaining AndroidX / Coroutines ServiceLoader files in `META-INF/services/`
+  1. Jeeny Ride-Hailing Auto-Launch (`launchPackage` method + dual trigger on permission-completion and engine active)
+  2. Complete Android 13/14 Restricted Settings Guided Dialog on return
+  3. Real Battery Optimization Permission (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`)
+  4. Real System Overlay Permission (`SYSTEM_ALERT_WINDOW`)
+  5. Real Android 13/14 Notifications Permission (`POST_NOTIFICATIONS`) + Honesty Check Fix
+  6. Test Mode & Test Order Overlay completely purged
+  7. Offline Ed25519 Cryptographic Licensing with Key Rotation & Transition Dual-Key Verification
+  8. Heartbeat Grace Period (Never auto-locks on network timeout / drop)
+  9. Clean repository: removed conflicting WebView app and junk scripts
+  10. Secrets rotation: passwords and private seeds removed from git tracking
 

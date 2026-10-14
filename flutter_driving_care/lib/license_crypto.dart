@@ -20,9 +20,14 @@ class LicenseInfo {
 }
 
 class DrivingCareCrypto {
-  // Master Ed25519 Public Key for offline signature verification (Safe in client code)
+  // Master Ed25519 Public Keys for offline signature verification (Safe in client code)
+  // Dual public key verification: Supports rotated new master key + legacy key for already issued drivers
+  static const List<String> trustedPublicKeysHex = [
+    'ca9aff6928e1b296b24d83589758128c5b6be2c1a555f1da3dfa72f1c3f63937', // Rotated New Master Key
+    '4d33b73ef90afd009626442d74ce1d593cd6db64f1d23b83d1ecbcb33a9588e9', // Legacy Master Key (Transition)
+  ];
   static const String masterPublicKeyHex =
-      '4d33b73ef90afd009626442d74ce1d593cd6db64f1d23b83d1ecbcb33a9588e9';
+      'ca9aff6928e1b296b24d83589758128c5b6be2c1a555f1da3dfa72f1c3f63937';
 
   static final _algorithm = Ed25519();
 
@@ -106,15 +111,23 @@ class DrivingCareCrypto {
           final expMs = payloadJson['exp'] is int ? payloadJson['exp'] as int : 0;
           final days = payloadJson['days'] is int ? payloadJson['days'] as int : 30;
 
-          // Verify Ed25519 signature
-          final pubBytes = _hexToBytes(masterPublicKeyHex);
-          final publicKey = SimplePublicKey(pubBytes, type: KeyPairType.ed25519);
-          final signature = Signature(sigBytes, publicKey: publicKey);
-
-          final isSignatureValid = await _algorithm.verify(
-            utf8.encode(payloadB64),
-            signature: signature,
-          );
+          // Verify Ed25519 signature (dual verification: new key + transition legacy key)
+          bool isSignatureValid = false;
+          for (final pubHex in trustedPublicKeysHex) {
+            try {
+              final pubBytes = _hexToBytes(pubHex);
+              final publicKey = SimplePublicKey(pubBytes, type: KeyPairType.ed25519);
+              final signature = Signature(sigBytes, publicKey: publicKey);
+              final valid = await _algorithm.verify(
+                utf8.encode(payloadB64),
+                signature: signature,
+              );
+              if (valid) {
+                isSignatureValid = true;
+                break;
+              }
+            } catch (_) {}
+          }
 
           if (!isSignatureValid) {
             return LicenseInfo(
