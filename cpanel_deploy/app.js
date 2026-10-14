@@ -321,7 +321,7 @@ class DrivingCarePortal {
     this.render();
     this.showToast(`Driver ${name} created with 30-day key: ${key}!`);
 
-    // Always sync to backend
+    // Always sync to backend and retrieve Ed25519 signed key
     fetch('/api/admin/create-key', {
       method: 'POST',
       headers: {
@@ -329,7 +329,16 @@ class DrivingCarePortal {
         'X-Admin-Token': this.adminToken || localStorage.getItem('dc_admin_token') || ''
       },
       body: JSON.stringify({ name, phone, city, key, days: 30 })
-    }).catch(e => console.error('Failed to sync key to server:', e));
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data && data.signedKey) {
+        newDriver.signedKey = data.signedKey;
+        this.saveDrivers(this.drivers);
+        this.render();
+      }
+    })
+    .catch(e => console.error('Failed to sync key to server:', e));
   }
 
   // Activate Pending Driver (Start 30-Day timer)
@@ -397,20 +406,22 @@ class DrivingCarePortal {
     if (!d) return;
 
     const expDateStr = d.expiresAt ? new Date(d.expiresAt).toLocaleDateString('en-GB') : 'Upon Activation';
+    const activeKey = d.signedKey || d.key;
     const message = 
 `Salam ${d.name} Bhai! 🚗
 Aap ki "Driving Care" Auto Bot App ki key ready hai:
 
-🔑 *License Key:* ${d.key}
+🔑 *License Key:* ${activeKey}
 📅 *Validity:* 30 Days (Valid until: ${expDateStr})
 ⚡ *Supported Apps:* Jeeny, Uber, Bolt
 
 *How to Activate:*
 1. Driving Care app open karein.
-2. Apna user key daalein: *${d.key}*
+2. Apna user key daalein: *${activeKey}*
 3. "Activate App" par click karein.
 4. Settings mein Min Price, Max Price aur Area select karke Bot ON kar lein!
 
+Download APK: https://saudia.pixeltrio.com/download.php
 Support WhatsApp: Bilal (+966 53 419 9549)`;
 
     navigator.clipboard.writeText(message).then(() => {
@@ -693,8 +704,8 @@ Support WhatsApp: Bilal (+966 53 419 9549)`;
           </td>
           <td><strong>${d.city}</strong></td>
           <td>
-            <span class="key-code" onclick="portal.copyKey('${d.key}')" title="Click to copy key">
-              🔑 ${d.key}
+            <span class="key-code" onclick="portal.copyKey('${d.signedKey || d.key}')" title="Click to copy activation key">
+              🔑 ${d.key} ${d.signedKey ? '<span style="font-size: 0.65rem; background: #10b981; color: #fff; padding: 2px 6px; border-radius: 4px; margin-left: 4px; font-weight: 700;">Signed ✔</span>' : ''}
             </span>
             <div style="font-size: 0.72rem; color: #94a3b8; margin-top: 4px;">
               📱 Bound: <strong style="color: ${d.boundDeviceId ? '#10b981' : '#f59e0b'}">${d.boundDeviceId ? d.boundDeviceId.substring(0, 12) + '...' : 'Not Bound'}</strong>
@@ -774,14 +785,16 @@ Support WhatsApp: Bilal (+966 53 419 9549)`;
               phone: d.phone,
               city: d.city,
               key: d.key,
+              signedKey: d.signedKey || null,
+              boundDeviceId: d.boundDeviceId || null,
               feeSAR: 150,
               status: d.status,
               online: d.online,
               device: d.device || 'Android Phone',
               ip: d.ip || '-',
               daysLeft: d.daysLeft || 30,
-              activatedAt: new Date().toISOString(),
-              expiresAt: new Date(Date.now() + (d.daysLeft || 30) * 24 * 60 * 60 * 1000).toISOString()
+              activatedAt: d.activatedAt || new Date().toISOString(),
+              expiresAt: d.activeUntil ? new Date(d.activeUntil).toISOString() : new Date(Date.now() + (d.daysLeft || 30) * 24 * 60 * 60 * 1000).toISOString()
             }));
             this.render();
           }

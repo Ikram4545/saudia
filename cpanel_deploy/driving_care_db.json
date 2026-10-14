@@ -16,7 +16,8 @@
         "minPrice": "10",
         "maxPrice": "100",
         "autoReject": true
-      }
+      },
+      "signedKey": "DCS-eyJrZXkiOiJEQy04OTIxIiwibmFtZSI6IlRhcmlxIEFsLUhhcmJpIiwiZGF5cyI6MzAsImV4cCI6MTc5NDU5MzczMzMyMn0=.J9+fGTnap6g29V188i/X/WG+4tRVEwhkKTn8gVoAhdiVOIZLtleQT+vHnE7CFaWSPRu5I5phusBxtCE/6L/aBA=="
     },
     {
       "key": "BILAL-VIP",
@@ -29,7 +30,8 @@
       "online": false,
       "lastPing": null,
       "ip": null,
-      "device": null
+      "device": null,
+      "signedKey": "DCS-eyJrZXkiOiJCSUxBTC1WSVAiLCJuYW1lIjoiQmlsYWwgKE93bmVyIEFkbWluKSIsImRheXMiOjM2NSwiZXhwIjoxODIzNTM3NzMzMzIzfQ==.0O0jEcEHhTHHcmU2jzt9pTqF5Sm70vpiHA0ln1x/vi6I9nO4KjlRkDAFCfUvSAY0AMryw7SC4SFB3evdBrlqCg=="
     }
   ],
   "logs": [

@@ -1032,6 +1032,116 @@ body {
   font-weight: 600;
 }
 
+
+/* ULTRA MOBILE RESPONSIVE ENHANCEMENTS */
+@media (max-width: 768px) {
+  body {
+    padding: 0;
+    font-size: 14px;
+  }
+  .navbar {
+    padding: 12px 14px;
+  }
+  .nav-container {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .brand {
+    justify-content: space-between;
+    width: 100%;
+  }
+  .nav-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+    justify-content: space-between;
+  }
+  .admin-profile {
+    padding: 4px 10px;
+    font-size: 0.8rem;
+  }
+  .partner-note {
+    display: none;
+  }
+  .nav-actions .btn {
+    flex: 1 1 auto;
+    justify-content: center;
+    padding: 8px 10px;
+    font-size: 0.8rem;
+  }
+  .main-container {
+    padding: 14px;
+  }
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+  .stat-card {
+    padding: 14px !important;
+  }
+  .stat-value {
+    font-size: 1.4rem !important;
+  }
+  .controls-section {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .filter-pills {
+    overflow-x: auto;
+    white-space: nowrap;
+    padding-bottom: 6px;
+    -webkit-overflow-scrolling: touch;
+    display: flex;
+    gap: 6px;
+  }
+  .filter-pill {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+  }
+  .search-box {
+    width: 100% !important;
+  }
+  .table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 12px;
+    margin: 0 -4px;
+  }
+  .drivers-table {
+    min-width: 680px;
+  }
+  .mobile-swipe-hint {
+    display: block !important;
+    text-align: center;
+    font-size: 0.75rem;
+    color: #94a3b8;
+    margin-bottom: 8px;
+  }
+  .info-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .admin-login-card {
+    padding: 24px 18px !important;
+    margin: 12px !important;
+    max-width: 95% !important;
+  }
+  .modal-card {
+    padding: 16px !important;
+    margin: 12px !important;
+    max-width: 95% !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -1063,6 +1173,9 @@ body {
         </div>
         <a href="../driving-care-app/index.html" target="_blank" class="btn" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px; background:rgba(16,185,129,0.15); color:#10b981; border:1px solid #10b981; padding:8px 14px; border-radius:10px; font-weight:700; font-size:0.85rem;">
           📱 Open Driver App
+        </a>
+                <a href="/download.php" download="Driving_Care.apk" class="btn" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px; background:linear-gradient(135deg, #10b981, #059669); color:#fff; border:none; padding:8px 14px; border-radius:10px; font-weight:700; font-size:0.85rem; box-shadow: 0 2px 8px rgba(16,185,129,0.3);">
+          📥 Download APK (v2.5)
         </a>
         <button id="addDriverBtn" class="btn btn-primary">
           <svg width="28" height="28" style="width:28px!important; height:28px!important; max-width:28px!important; max-height:28px!important; display:inline-block;" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -1362,6 +1475,7 @@ body {
   <!-- Toast Notification Container -->
   
   <!-- Master Admin Security Gate / Login Modal -->
+    <!-- Master Admin Security Gate / Login Modal -->
   <div id="adminLoginModal" class="admin-login-overlay" style="display: flex;">
     <div class="admin-login-card">
       <div class="login-brand">
@@ -1373,18 +1487,18 @@ body {
         </div>
         <h2>DRIVING CARE</h2>
         <span class="login-sub">Saudi Dispatch Bot &bull; Master Admin Security</span>
-        <div class="login-auth-badge">🔒 Restricted: Bilal & Ikram (Developer) Only</div>
+        <div class="login-auth-badge">🔒 Restricted: Bilal & Ikram Only</div>
       </div>
 
-      <form id="adminLoginForm" class="login-form">
+      <form id="adminLoginForm" action="javascript:void(0);" onsubmit="event.preventDefault(); window.handleAdminLogin();" class="login-form">
         <div class="form-group" style="margin-bottom: 16px;">
           <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #94a3b8; margin-bottom: 6px;">Admin Username</label>
-          <input type="text" id="adminUsernameInput" class="form-input" value="ikram" placeholder="Username (ikram / bilal / admin)" required style="width: 100%; padding: 12px 14px; background: rgba(16,22,34,0.9); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; color: #fff; font-size: 0.95rem;">
+          <input type="text" id="adminUsernameInput" class="form-input" value="Ikram" placeholder="Username" required style="width: 100%; padding: 12px 14px; background: rgba(16,22,34,0.9); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; color: #fff; font-size: 0.95rem;">
         </div>
         <div class="form-group" style="margin-bottom: 18px;">
           <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #94a3b8; margin-bottom: 6px;">Admin Password</label>
           <div style="position: relative;">
-            <input type="password" id="adminPasswordInput" class="form-input" placeholder="Enter Master Admin Password" required autofocus style="width: 100%; padding: 12px 42px 12px 14px; background: rgba(16,22,34,0.9); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; color: #fff; font-size: 0.95rem;">
+            <input type="password" id="adminPasswordInput" class="form-input" placeholder="Enter Admin Password" required autofocus style="width: 100%; padding: 12px 42px 12px 14px; background: rgba(16,22,34,0.9); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; color: #fff; font-size: 0.95rem;">
             <button type="button" id="toggleAdminPwBtn" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 1.1rem;">👁️</button>
           </div>
         </div>
@@ -1395,15 +1509,107 @@ body {
       </form>
 
       <div class="login-footer-info" style="margin-top: 22px; text-align: center; font-size: 0.8rem; color: #64748b; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 14px; line-height: 1.6;">
-        <div>Developer Support: <strong>Ikram (03113154649)</strong></div>
-        <div>Default Password: <code style="color: #60a5fa; background: rgba(59,130,246,0.15); padding: 2px 6px; border-radius: 4px; font-family: monospace;">ikram786</code></div>
+        <div>Technical Partner: <strong>Ikram (03113154649)</strong></div>
+        <div>Owner Admin: <strong>Bilal (+966 53 419 9549)</strong></div>
       </div>
     </div>
+  </div>
   </div>
 
   <div id="toastContainer" class="toast-container"></div>
 
     <script src="app.js"></script>
   <script src="/app.js"></script>
+
+<script>
+window.handleAdminLogin = async function() {
+  const userInp = document.getElementById('adminUsernameInput');
+  const passInp = document.getElementById('adminPasswordInput');
+  const errBox = document.getElementById('loginErrorAlert');
+  const modal = document.getElementById('adminLoginModal');
+  
+  if (errBox) errBox.style.display = 'none';
+  const username = userInp ? userInp.value.trim() : '';
+  const password = passInp ? passInp.value.trim() : '';
+  
+  if (!username || !password) {
+    if (errBox) {
+      errBox.textContent = 'Baraye meherbani username aur password dono darj karein.';
+      errBox.style.display = 'block';
+    }
+    return false;
+  }
+  
+  try {
+    const res = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      localStorage.setItem('dc_admin_token', data.token);
+      localStorage.setItem('dc_admin_user', data.username || username);
+      if (modal) modal.style.display = 'none';
+      if (window.portal) {
+        window.portal.adminToken = data.token;
+        window.portal.startLivePolling();
+        window.portal.showToast('Khush amdeed ' + (data.username || username) + '! Admin Panel Unlocked.');
+      }
+    } else {
+      if (errBox) {
+        errBox.textContent = data.message || 'Ghalat Username ya Password! Baraye meherbani sahi password darj karein.';
+        errBox.style.display = 'block';
+      }
+    }
+  } catch(e) {
+    if (errBox) {
+      errBox.textContent = 'Server connection error. Please try again.';
+      errBox.style.display = 'block';
+    }
+  }
+  return false;
+};
+
+window.handleAdminLogout = function() {
+  if (confirm('Admin panel ko lock aur logout karna chahte hain?')) {
+    localStorage.removeItem('dc_admin_token');
+    const modal = document.getElementById('adminLoginModal');
+    const passInp = document.getElementById('adminPasswordInput');
+    if (passInp) passInp.value = '';
+    if (modal) modal.style.display = 'flex';
+  }
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+  const token = localStorage.getItem('dc_admin_token');
+  const modal = document.getElementById('adminLoginModal');
+  if (token) {
+    if (modal) modal.style.display = 'none';
+    if (window.portal) {
+      window.portal.adminToken = token;
+      window.portal.startLivePolling();
+    }
+  } else {
+    if (modal) modal.style.display = 'flex';
+  }
+  
+  const toggleBtn = document.getElementById('toggleAdminPwBtn');
+  const passInp = document.getElementById('adminPasswordInput');
+  if (toggleBtn && passInp) {
+    toggleBtn.addEventListener('click', function() {
+      const isPw = passInp.type === 'password';
+      passInp.type = isPw ? 'text' : 'password';
+      toggleBtn.textContent = isPw ? '🔒' : '👁️';
+    });
+  }
+
+  const logoutBtn = document.getElementById('adminLogoutBtn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', window.handleAdminLogout);
+  }
+});
+</script>
+
 </body>
 </html>
