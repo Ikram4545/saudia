@@ -149,15 +149,20 @@ class MainActivity : FlutterActivity() {
                 }
                 "areNotificationsEnabled" -> {
                     try {
-                        val notifManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-                        val enabled = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-                            notifManager.areNotificationsEnabled()
-                        } else {
-                            false
-                        }
+                        val enabled = androidx.core.app.NotificationManagerCompat.from(this).areNotificationsEnabled()
                         result.success(enabled)
                     } catch (e: Exception) {
-                        result.success(false)
+                        try {
+                            val notifManager = getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager
+                            val enabled = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                                notifManager?.areNotificationsEnabled() ?: false
+                            } else {
+                                true
+                            }
+                            result.success(enabled)
+                        } catch (e2: Exception) {
+                            result.success(false)
+                        }
                     }
                 }
                 "requestNotificationPermission" -> {

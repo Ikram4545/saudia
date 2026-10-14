@@ -17,6 +17,7 @@ flutter_driving_care/build/
 
 # Media & Scratch Files
 *.mp4
+!cpanel_deploy/recordings/*.mp4
 *.ogg
 *.mp3
 __pycache__/

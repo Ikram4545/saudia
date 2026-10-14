@@ -270,18 +270,12 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
   Future<void> _checkNotificationStatus() async {
     try {
       final bool? enabled = await platform.invokeMethod<bool>('areNotificationsEnabled');
-      if (mounted) {
+      if (mounted && enabled != null) {
         setState(() {
-          notificationsGranted = enabled ?? false; // Honesty fix: default to false
+          notificationsGranted = enabled;
         });
       }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          notificationsGranted = false;
-        });
-      }
-    }
+    } catch (_) {}
   }
 
   Future<void> _requestNotificationPermission() async {
@@ -2032,7 +2026,9 @@ class _AdvancedControlScreenState extends State<AdvancedControlScreen> with Widg
           isAccessibilityActive = isAcc ?? false;
           batteryOptGranted = isBatt ?? false;
           overlayGranted = isOver ?? false;
-          notificationsGranted = isNotif ?? false; // Honesty fix: default to false
+          if (isNotif != null) {
+            notificationsGranted = isNotif;
+          }
         });
       }
     } catch (_) {}
