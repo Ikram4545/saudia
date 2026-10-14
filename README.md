@@ -72,3 +72,24 @@ Previously, creating a driver in the Admin Web Portal saved to browser `localSto
 - **Master Admin Username**: `Ikram`
 - **Master Admin Password**: `Ikram445@@`
 - **APK Download**: `https://saudia.pixeltrio.com/download.php`
+- **Direct APK**: `https://saudia.pixeltrio.com/DrivingCare.apk`
+
+---
+
+## Latest Release & Commit Info (Fresh 14 October 2026)
+- **Release Version**: Driving Care v2.4 (Production Release)
+- **Date**: 14 October 2026
+- **APK File**: `Driving_Care_v2.4_Production.apk` (22.08 MB)
+- **Official Live Download**: `https://saudia.pixeltrio.com/download.html`
+- **Direct Download Link**: `https://saudia.pixeltrio.com/DrivingCare.apk`
+- **Official Keystore**: `driving_care.keystore` (Alias: `drivingcare`)
+- **Key Updates**:
+  1. Real Battery Optimization Permission (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`)
+  2. Real System Overlay Permission (`SYSTEM_ALERT_WINDOW`)
+  3. Real Android 13/14 Notifications Permission (`POST_NOTIFICATIONS`) + Persistent Foreground Status Bar Notification
+  4. Test Mode & Test Order Overlay completely purged
+  5. Offline Ed25519 Cryptographic Licensing (`license_crypto.dart`) + Nasir Offline Whitelist (`DC-NASIR-11`)
+  6. Heartbeat Grace Period (Never auto-locks on network timeout / drop)
+  7. Android 13/14 Restricted Settings 1-Tap Bypass to App Info
+  8. Startup crash resolved by retaining AndroidX / Coroutines ServiceLoader files in `META-INF/services/`
+
