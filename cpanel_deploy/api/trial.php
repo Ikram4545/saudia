@@ -7,9 +7,40 @@ $body = file_get_contents('php://input');
 $data = json_decode($body, true) ?? [];
 
 $device = $data['device'] ?? 'Android Device';
+$deviceId = trim($data['deviceId'] ?? '');
 $client_ip = get_client_ip();
 
 $db = get_db();
+
+// Device-bound trial: ek phone par sirf EK trial.
+// Agar is device ka trial abhi chal raha hai to wahi wapas do (naya mat banao);
+// agar khatam ho chuka hai to dobara trial mat do.
+if ($deviceId !== '') {
+    foreach ($db['drivers'] as $drv) {
+        if (($drv['deviceId'] ?? '') === $deviceId && ($drv['status'] ?? '') === 'trial') {
+            if (($drv['activeUntil'] ?? 0) > time() * 1000) {
+                echo json_encode([
+                    'success' => true,
+                    'driver' => [
+                        'name' => $drv['name'],
+                        'key' => $drv['key'],
+                        'daysLeft' => $drv['daysLeft'],
+                        'city' => $drv['city'],
+                        'status' => $drv['status']
+                    ]
+                ]);
+                return;
+            }
+            echo json_encode([
+                'success' => false,
+                'error' => 'trial_used',
+                'message' => 'Is phone par 48 ghantay ka trial pehle use ho chuka hai.'
+            ]);
+            return;
+        }
+    }
+}
+
 $trialKey = 'TRIAL-' . rand(1000, 9999);
 
 $newDriver = [
@@ -23,7 +54,8 @@ $newDriver = [
     'online' => true,
     'lastPing' => date('c'),
     'ip' => $client_ip,
-    'device' => $device
+    'device' => $device,
+    'deviceId' => $deviceId
 ];
 
 $db['drivers'][] = $newDriver;

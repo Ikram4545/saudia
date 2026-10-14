@@ -2,6 +2,7 @@
 // Robust chunked APK downloader for Driving Care
 $candidates = [
     __DIR__ . '/DrivingCare.apk',
+    __DIR__ . '/Driving_Care_v2.5_Production.apk',
     __DIR__ . '/Driving_Care_v2.4_Production.apk',
     __DIR__ . '/Driving_Care_Official_v2.0.apk',
 ];
@@ -15,7 +16,7 @@ foreach ($candidates as $c) {
 }
 
 if ($file) {
-    $filename = "Driving_Care_v2.4.0.apk";
+    $filename = "Driving_Care_v2.5.0.apk";
     $filesize = filesize($file);
 
     // Disable execution time limit for slow mobile connections

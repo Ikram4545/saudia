@@ -137,6 +137,14 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
   bool overlayGranted = false;
   bool notificationsGranted = false; // Honesty fix: initialized to false
 
+  // Jeeny Auto-Open (notification listener) + floating button state
+  bool notificationListenerGranted = false;
+  bool showFloatingButton = true;
+  bool autoLaunchOnNotification = true;
+  bool _openedNotifListenerSettingsOnce = false;
+  String lastAutoLaunchPkg = '';
+  int lastAutoLaunchAtMs = 0;
+
   bool _hasAutoLaunchedJeeny = false;
   bool _openedAccessibilitySettingsOnce = false;
 
@@ -185,10 +193,14 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _initDeviceId();
-    _loadCachedLicense();
+    // Load the native flags + cached license FIRST, then push one combined sync.
+    // This way an engine OFF chosen from the floating button is respected at
+    // app start instead of being forced back ON.
+    Future.wait([_loadNativeFlags(), _loadCachedLicense()]).then((_) {
+      _syncSettingsToNativeService();
+    });
     _checkAllPermissions();
     _startTimers();
-    _syncSettingsToNativeService(engineOn: true);
   }
 
   Future<void> _initDeviceId() async {
@@ -220,6 +232,9 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
         if (_openedAccessibilitySettingsOnce && !isAccessibilityActive) {
           _openedAccessibilitySettingsOnce = false;
           _showRestrictedSettingsGuideDialog();
+        } else if (_openedNotifListenerSettingsOnce && !notificationListenerGranted) {
+          _openedNotifListenerSettingsOnce = false;
+          _showNotificationListenerGuideDialog();
         }
       });
     }
@@ -231,6 +246,8 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
       _checkBatteryOptStatus(),
       _checkOverlayStatus(),
       _checkNotificationStatus(),
+      _checkNotificationListenerStatus(),
+      _loadNativeFlags(),
     ]);
 
     if (!mounted) return;
@@ -276,6 +293,111 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
         });
       }
     } catch (_) {}
+  }
+
+  // Jeeny Auto-Open: is our notification listener allowed by Android?
+  Future<void> _checkNotificationListenerStatus() async {
+    try {
+      final bool? enabled = await platform.invokeMethod<bool>('isNotificationListenerEnabled');
+      if (mounted && enabled != null) {
+        setState(() {
+          notificationListenerGranted = enabled;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _openNotificationListenerSettings() async {
+    _openedNotifListenerSettingsOnce = true;
+    try {
+      await platform.invokeMethod('openNotificationListenerSettings');
+    } catch (_) {}
+  }
+
+  // Reads the flags the native side owns (engine state can be flipped from the
+  // floating button while this app is in the background, so the UI adopts the
+  // native truth every time it loads / resumes).
+  Future<void> _loadNativeFlags() async {
+    try {
+      final result = await platform.invokeMethod<Map>('getNativeFlags');
+      if (result != null && mounted) {
+        setState(() {
+          final nativeEngine = result['runAutoEngine'];
+          if (nativeEngine is bool) {
+            runAutoEngine = nativeEngine;
+          }
+          showFloatingButton = result['showFloatingButton'] == true;
+          autoLaunchOnNotification = result['autoLaunchOnNotification'] == true;
+          lastAutoLaunchPkg = result['lastAutoLaunchPkg']?.toString() ?? '';
+          final at = result['lastAutoLaunchAt'];
+          lastAutoLaunchAtMs = at is int ? at : 0;
+        });
+      }
+    } catch (_) {}
+  }
+
+  // Pushes ONLY the feature flags (+ current license state) to the native side.
+  Future<void> _syncFeatureFlags() async {
+    try {
+      await platform.invokeMethod('syncSettings', {
+        'showFloatingButton': showFloatingButton,
+        'autoLaunchOnNotification': autoLaunchOnNotification,
+        'licenseActive': isActivated,
+      });
+    } catch (_) {}
+  }
+
+  void _showNotificationListenerGuideDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Row(
+          children: [
+            Icon(Icons.notifications_active_rounded, color: Color(0xFF2563EB), size: 26),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Jeeny Auto-Open ON karein',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Is se order ki notification aate hi Jeeny khud samne khul jayega aur order auto-accept ho jayega.',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 14),
+            _guideStep(1, 'Neeche wala button dabayein — "Notification access" ki list khulegi.'),
+            _guideStep(2, 'List mein "Driving Care Order Alerts" ko chunein aur Allow ON karein.'),
+            _guideStep(3, 'Agar switch band/gray hai to pehle: Settings → Apps → Driving Care → upar ⋮ (teen nuqte) → "Allow restricted settings" ON karein, phir wapas aa kar Allow karein.'),
+            _guideStep(4, 'Wapas Driving Care mein aayein — Auto-Open ka status ON ✔ ho jayega.'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Baad Mein'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2563EB),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _openNotificationListenerSettings();
+            },
+            child: const Text('Notification Access Kholo'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _requestNotificationPermission() async {
@@ -333,8 +455,14 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
         final elapsedDays = savedAt > 0 ? ((DateTime.now().millisecondsSinceEpoch - savedAt) / (86400 * 1000)).floor() : 0;
         final remaining = days - elapsedDays;
-        
+
         if (remaining > 0) {
+          if (boundDevId.isEmpty && currentDeviceId.isNotEmpty && currentDeviceId != 'UNKNOWN_DEVICE') {
+            // First-phone lock-in: purane cache mein binding nahi thi, to is key ko
+            // isi phone ke sath bandh do — ab ye key dusre phone par nahi chalegi.
+            // (days ki jagah "remaining" bheja hai taake muddat aage na barhe.)
+            _saveLicenseCache(key: key, name: name, days: remaining, boundDeviceId: currentDeviceId);
+          }
           setState(() {
             isActivated = true;
             isTrial = false;
@@ -343,7 +471,6 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
             expiryDisplay = '$remaining Din Baqi';
             lockReason = '';
           });
-          _syncSettingsToNativeService(engineOn: true);
         }
       }
     } catch (_) {}
@@ -370,7 +497,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
         }
       }
       final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
-      client.userAgent = 'DrivingCareApp/2.4';
+      client.userAgent = 'DrivingCareApp/2.5';
       final uri = Uri.parse('$serverUrl/api/ping');
       final request = await client.postUrl(uri);
       request.headers.contentType = ContentType.json;
@@ -690,6 +817,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
         'autoReject': autoReject,
         'blockedLocations': blocked,
         'avoidWords': avoidWords,
+        'licenseActive': isActivated,
       });
     } catch (_) {}
   }
@@ -734,7 +862,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
   Future<void> _sendHeartbeatCheck() async {
     try {
       final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
-      client.userAgent = 'DrivingCareApp/2.4';
+      client.userAgent = 'DrivingCareApp/2.5';
       final uri = Uri.parse('$serverUrl/api/ping');
       final request = await client.postUrl(uri);
       request.headers.contentType = ContentType.json;
@@ -882,9 +1010,18 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
   }
 
   // Start 48-Hour Trial (With countdown & automatic self-destruct lock)
+  // Trial ab device-bound hai: ek phone = ek hi trial (server deviceId se yaad rakhta hai).
   Future<void> _startTrial() async {
     final now = DateTime.now();
     final expireDate = now.add(const Duration(hours: 48));
+
+    if (currentDeviceId.isEmpty) {
+      try {
+        currentDeviceId = await platform.invokeMethod<String>('getDeviceId') ?? 'UNKNOWN_DEVICE';
+      } catch (_) {
+        currentDeviceId = 'UNKNOWN_DEVICE';
+      }
+    }
 
     try {
       final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
@@ -892,12 +1029,26 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
       final request = await client.postUrl(uri);
       request.headers.contentType = ContentType.json;
       request.write(jsonEncode({
-        'device': 'Driver Mobile (Trial)',
+        'device': 'Android ($currentDeviceId)',
+        'deviceId': currentDeviceId,
         'phone': 'Pending Trial',
       }));
       final response = await request.close();
       final bodyStr = await response.transform(utf8.decoder).join();
       final data = jsonDecode(bodyStr);
+
+      // Server ne is phone ka trial pehle se used qarar diya — dobara trial NAHI milega.
+      if (data is Map && data['success'] == false) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: const Color(0xFFEF4444),
+              content: Text(data['message']?.toString() ?? 'Is phone par trial pehle use ho chuka hai.'),
+            ),
+          );
+        }
+        return;
+      }
 
       if (mounted) {
         setState(() {
@@ -1052,7 +1203,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
                 borderRadius: BorderRadius.circular(6),
               ),
               child: const Text(
-                'v2.4.0',
+                'v2.5.0',
                 style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
               ),
             ),
@@ -1562,6 +1713,118 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
                           ),
                         ],
                       ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Jeeny Auto-Open Card (notification listener + floating button)
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: borderColor),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.notifications_active_rounded,
+                      size: 18,
+                      color: notificationListenerGranted ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Jeeny Auto-Open',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: (notificationListenerGranted ? const Color(0xFF10B981) : const Color(0xFFEF4444)).withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: notificationListenerGranted ? const Color(0xFF10B981) : const Color(0xFFEF4444)),
+                      ),
+                      child: Text(
+                        notificationListenerGranted ? 'ON ✔' : 'OFF ✕',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: notificationListenerGranted ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Order ki notification aate hi Jeeny khud samne khul jayega, phir order khud accept ho jayega — phone jeb mein ho tab bhi.',
+                  style: TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+                if (!notificationListenerGranted) ...[
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2563EB),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(Icons.lock_open_rounded, size: 16),
+                      label: const Text('Notification Access ON karein', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      onPressed: _openNotificationListenerSettings,
+                    ),
+                  ),
+                ],
+                if (notificationListenerGranted && lastAutoLaunchAtMs > 0) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Aakhri auto-open: $lastAutoLaunchPkg • ${DateTime.fromMillisecondsSinceEpoch(lastAutoLaunchAtMs).hour}:${DateTime.fromMillisecondsSinceEpoch(lastAutoLaunchAtMs).minute.toString().padLeft(2, '0')}',
+                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+                  ),
+                ],
+                const Divider(height: 20),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text('Notification par Jeeny khud khule', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    ),
+                    Switch(
+                      value: autoLaunchOnNotification,
+                      activeColor: const Color(0xFF10B981),
+                      onChanged: (v) {
+                        setState(() {
+                          autoLaunchOnNotification = v;
+                        });
+                        _syncFeatureFlags();
+                      },
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text('Floating button (chhota DC button)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    ),
+                    Switch(
+                      value: showFloatingButton,
+                      activeColor: const Color(0xFF10B981),
+                      onChanged: (v) {
+                        setState(() {
+                          showFloatingButton = v;
+                        });
+                        _syncFeatureFlags();
+                      },
                     ),
                   ],
                 ),

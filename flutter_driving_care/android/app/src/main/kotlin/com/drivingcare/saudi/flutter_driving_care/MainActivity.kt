@@ -206,28 +206,54 @@ class MainActivity : FlutterActivity() {
                 }
                 "syncSettings" -> {
                     try {
-                        val runAutoEngine = call.argument<Boolean>("runAutoEngine") ?: true
-                        val minPrice = (call.argument<Double>("minPrice") ?: 10.0).toFloat()
-                        val maxPrice = (call.argument<Double>("maxPrice") ?: 200.0).toFloat()
-                        val maxPickupTime = (call.argument<Double>("maxPickupTime") ?: 15.0).toFloat()
-                        val autoReject = call.argument<Boolean>("autoReject") ?: false
-                        val blockedLocationsList = call.argument<List<String>>("blockedLocations") ?: emptyList()
-                        val avoidWordsList = call.argument<List<String>>("avoidWords") ?: emptyList()
-
+                        // Every key is written ONLY when the caller actually sent it,
+                        // so a partial sync (e.g. just the feature flags) can never
+                        // clobber settings it did not mention.
                         val prefs = getSharedPreferences(DrivingCareAccessibilityService.PREFS_NAME, Context.MODE_PRIVATE)
-                        prefs.edit().apply {
-                            putBoolean("run_auto_engine", runAutoEngine)
-                            putFloat("min_price", minPrice)
-                            putFloat("max_price", maxPrice)
-                            putFloat("max_pickup_time", maxPickupTime)
-                            putBoolean("auto_reject", autoReject)
-                            putStringSet("blocked_locations", blockedLocationsList.toSet())
-                            putStringSet("avoid_words", avoidWordsList.toSet())
-                            apply()
-                        }
+                        val editor = prefs.edit()
+                        call.argument<Boolean>("runAutoEngine")?.let { editor.putBoolean("run_auto_engine", it) }
+                        call.argument<Double>("minPrice")?.let { editor.putFloat("min_price", it.toFloat()) }
+                        call.argument<Double>("maxPrice")?.let { editor.putFloat("max_price", it.toFloat()) }
+                        call.argument<Double>("maxPickupTime")?.let { editor.putFloat("max_pickup_time", it.toFloat()) }
+                        call.argument<Boolean>("autoReject")?.let { editor.putBoolean("auto_reject", it) }
+                        call.argument<List<String>>("blockedLocations")?.let { editor.putStringSet("blocked_locations", it.toSet()) }
+                        call.argument<List<String>>("avoidWords")?.let { editor.putStringSet("avoid_words", it.toSet()) }
+                        // Feature flags used by the notification listener + floating button
+                        call.argument<Boolean>("licenseActive")?.let { editor.putBoolean("license_active", it) }
+                        call.argument<Boolean>("showFloatingButton")?.let { editor.putBoolean("show_floating_button", it) }
+                        call.argument<Boolean>("autoLaunchOnNotification")?.let { editor.putBoolean("auto_launch_on_notification", it) }
+                        editor.apply()
                         result.success(true)
                     } catch (e: Exception) {
                         result.error("SYNC_ERROR", e.message, null)
+                    }
+                }
+                "isNotificationListenerEnabled" -> {
+                    result.success(isNotificationListenerEnabled())
+                }
+                "openNotificationListenerSettings" -> {
+                    try {
+                        val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("NOTIF_LISTENER_SETTINGS_ERROR", e.message, null)
+                    }
+                }
+                "getNativeFlags" -> {
+                    try {
+                        val prefs = getSharedPreferences(DrivingCareAccessibilityService.PREFS_NAME, Context.MODE_PRIVATE)
+                        val map = HashMap<String, Any>()
+                        map["runAutoEngine"] = prefs.getBoolean("run_auto_engine", true)
+                        map["showFloatingButton"] = prefs.getBoolean("show_floating_button", true)
+                        map["autoLaunchOnNotification"] = prefs.getBoolean("auto_launch_on_notification", true)
+                        map["licenseActive"] = prefs.getBoolean("license_active", false)
+                        map["lastAutoLaunchPkg"] = prefs.getString("last_auto_launch_pkg", "") ?: ""
+                        map["lastAutoLaunchAt"] = prefs.getLong("last_auto_launch_at", 0L)
+                        result.success(map)
+                    } catch (e: Exception) {
+                        result.success(null)
                     }
                 }
                 "openWhatsApp" -> {
@@ -298,6 +324,18 @@ class MainActivity : FlutterActivity() {
                 }
                 else -> result.notImplemented()
             }
+        }
+    }
+
+    private fun isNotificationListenerEnabled(): Boolean {
+        val enabledListeners = Settings.Secure.getString(
+            contentResolver,
+            "enabled_notification_listeners"
+        ) ?: return false
+
+        return enabledListeners.split(":").any { component ->
+            component.contains(packageName, ignoreCase = true) &&
+                component.contains("DrivingCareNotificationListener", ignoreCase = true)
         }
     }
 

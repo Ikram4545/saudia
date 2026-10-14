@@ -5,13 +5,21 @@ import android.accessibilityservice.GestureDescription
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Path
+import android.graphics.PixelFormat
 import android.graphics.Rect
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.util.Log
+import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.TextView
 import android.widget.Toast
 
 class DrivingCareAccessibilityService : AccessibilityService() {
@@ -28,6 +36,12 @@ class DrivingCareAccessibilityService : AccessibilityService() {
 
     private lateinit var prefs: SharedPreferences
     private var lastActionTime: Long = 0
+
+    // Floating button (HUD) state
+    private var windowManager: WindowManager? = null
+    private var hudView: TextView? = null
+    private var hudParams: WindowManager.LayoutParams? = null
+    private var hudPrefsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
 
     fun showStatusNotification(statusText: String) {
         try {
@@ -137,11 +151,14 @@ class DrivingCareAccessibilityService : AccessibilityService() {
         prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         Log.d(TAG, "Driving Care Native Accessibility Auto-Clicker Connected & Active!")
         showStatusNotification("Autopilot Active — Monitoring Jeeny & Ride Requests")
+        registerHudPrefsListener()
+        refreshHud()
     }
 
     override fun onUnbind(intent: android.content.Intent?): Boolean {
         isServiceRunning = false
         instance = null
+        teardownHud()
         try {
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
             notificationManager.cancel(NOTIF_ID)
@@ -152,6 +169,7 @@ class DrivingCareAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         isServiceRunning = false
         instance = null
+        teardownHud()
         try {
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
             notificationManager.cancel(NOTIF_ID)
@@ -446,6 +464,184 @@ class DrivingCareAccessibilityService : AccessibilityService() {
                     }
                 } catch (_: Exception) {}
             }
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Floating button (HUD)
+    //
+    // A small round "DC" button that floats above every app (including Jeeny).
+    // GREEN = engine ON, RED = engine OFF. A tap toggles the engine by flipping
+    // the same "run_auto_engine" preference the Flutter dashboard uses, and the
+    // button can be dragged anywhere on screen (position is remembered).
+    // It lives inside this AccessibilityService because the engine cannot work
+    // without the service anyway; it only appears when the driver has granted
+    // the Display-Over-Other-Apps (overlay) permission and the in-app
+    // "Floating button" switch is ON.
+    // ---------------------------------------------------------------------
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    private fun registerHudPrefsListener() {
+        if (hudPrefsListener != null) return
+        hudPrefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == "run_auto_engine" || key == "show_floating_button") {
+                Handler(Looper.getMainLooper()).post { refreshHud() }
+            }
+        }
+        try {
+            prefs.registerOnSharedPreferenceChangeListener(hudPrefsListener)
+        } catch (_: Exception) {}
+    }
+
+    private fun teardownHud() {
+        hudPrefsListener?.let {
+            try {
+                prefs.unregisterOnSharedPreferenceChangeListener(it)
+            } catch (_: Exception) {}
+        }
+        hudPrefsListener = null
+        hideHud()
+    }
+
+    private fun refreshHud() {
+        val show = prefs.getBoolean("show_floating_button", true)
+        if (show) {
+            if (hudView == null) showHud()
+            updateHudColor()
+        } else {
+            hideHud()
+        }
+    }
+
+    private fun hudBackground(engineOn: Boolean): GradientDrawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(if (engineOn) 0xFF10B981.toInt() else 0xFFEF4444.toInt())
+            setStroke(dp(2), 0xFFFFFFFF.toInt())
+        }
+    }
+
+    private fun updateHudColor() {
+        hudView?.background = hudBackground(prefs.getBoolean("run_auto_engine", true))
+    }
+
+    private fun showHud() {
+        try {
+            if (hudView != null) return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+                Log.d(TAG, "Floating button skipped: overlay permission not granted")
+                return
+            }
+            windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            val size = dp(56)
+            val button = TextView(this).apply {
+                text = "DC"
+                textSize = 15f
+                setTextColor(0xFFFFFFFF.toInt())
+                gravity = Gravity.CENTER
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                background = hudBackground(prefs.getBoolean("run_auto_engine", true))
+            }
+            val windowType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_PHONE
+            }
+            val params = WindowManager.LayoutParams(
+                size,
+                size,
+                windowType,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.TOP or Gravity.START
+                x = prefs.getInt("hud_x", resources.displayMetrics.widthPixels - size - dp(12))
+                y = prefs.getInt("hud_y", (resources.displayMetrics.heightPixels * 0.38).toInt())
+            }
+            button.setOnTouchListener(HudTouchListener(params))
+            windowManager?.addView(button, params)
+            hudView = button
+            hudParams = params
+            Log.d(TAG, "Floating button shown")
+        } catch (e: Exception) {
+            Log.e(TAG, "showHud failed: ${e.message}")
+        }
+    }
+
+    private fun hideHud() {
+        try {
+            hudView?.let { windowManager?.removeView(it) }
+        } catch (_: Exception) {}
+        hudView = null
+        hudParams = null
+    }
+
+    private fun toggleEngineFromHud() {
+        val newState = !prefs.getBoolean("run_auto_engine", true)
+        prefs.edit().putBoolean("run_auto_engine", newState).apply()
+        updateHudColor()
+        showStatusNotification(
+            if (newState) {
+                "Autopilot Active — Monitoring Jeeny & Ride Requests"
+            } else {
+                "Autopilot Paused — tap the floating button to resume"
+            }
+        )
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(
+                applicationContext,
+                if (newState) "Driving Care Engine ON 🟢" else "Driving Care Engine OFF 🔴",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    private inner class HudTouchListener(
+        private val params: WindowManager.LayoutParams
+    ) : View.OnTouchListener {
+        private var startX = 0
+        private var startY = 0
+        private var touchRawX = 0f
+        private var touchRawY = 0f
+        private var moved = false
+
+        override fun onTouch(view: View, event: MotionEvent): Boolean {
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    startX = params.x
+                    startY = params.y
+                    touchRawX = event.rawX
+                    touchRawY = event.rawY
+                    moved = false
+                    return true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = (event.rawX - touchRawX).toInt()
+                    val dy = (event.rawY - touchRawY).toInt()
+                    if (Math.abs(dx) > dp(6) || Math.abs(dy) > dp(6)) moved = true
+                    params.x = startX + dx
+                    params.y = startY + dy
+                    try {
+                        windowManager?.updateViewLayout(view, params)
+                    } catch (_: Exception) {}
+                    return true
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (!moved) {
+                        toggleEngineFromHud()
+                    } else {
+                        prefs.edit()
+                            .putInt("hud_x", params.x)
+                            .putInt("hud_y", params.y)
+                            .apply()
+                    }
+                    return true
+                }
+            }
+            return false
         }
     }
 }
