@@ -159,13 +159,13 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
   static const List<String> uberPackages = ['com.ubercab.driver'];
   static const List<String> boltPackages = ['ee.mtakso.driver'];
 
-  // Saudi Blocked Locations
+  // Saudi Blocked Locations (All unselected by default so new installs never block orders out of the box)
   final List<SaudiLocationItem> allLocations = [
-    SaudiLocationItem('Riyadh Dammam Railway / SAR', isSelected: true),
-    SaudiLocationItem('Al Bat\'ha (البطحاء)', isSelected: true),
-    SaudiLocationItem('Al-Shamisi (الشميسي)', isSelected: true),
-    SaudiLocationItem('Manfuhah (منفوحة)', isSelected: true),
-    SaudiLocationItem('Airport (مطار)', isSelected: true),
+    SaudiLocationItem('Riyadh Dammam Railway Station (محطة القطار)', isSelected: false),
+    SaudiLocationItem('Al Bat\'ha (البطحاء)', isSelected: false),
+    SaudiLocationItem('Al-Shamisi (الشميسي)', isSelected: false),
+    SaudiLocationItem('Manfuhah (منفوحة)', isSelected: false),
+    SaudiLocationItem('Airport (مطار)', isSelected: false),
     SaudiLocationItem('Al Safarat (السفارات)', isSelected: false),
     SaudiLocationItem('KAFD / King Abdullah Financial Dist', isSelected: false),
     SaudiLocationItem('KAFD Ring Road', isSelected: false),
@@ -173,7 +173,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
     SaudiLocationItem('KAFD HQ Tower (Tower 2.14-B)', isSelected: false),
   ];
 
-  List<String> avoidWords = ['Hospital', 'Al Batha'];
+  List<String> avoidWords = [];
   List<String> likedWords = ['KAFD', 'Al Malqa', 'Al Olaya'];
 
   // Live Domain Server Connection
