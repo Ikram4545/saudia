@@ -1165,10 +1165,10 @@ body {
 
       <div class="nav-actions">
         <div class="admin-profile">
-          <div class="avatar">B</div>
+          <div class="avatar">C</div>
           <div class="profile-details">
-            <span class="admin-name">Bilal (Admin)</span>
-            <span class="partner-note">Partner: Ikram (Dev 15%)</span>
+            <span class="admin-name">Client Reseller & Sales Portal</span>
+            <span class="partner-note">Commission: 30% - 40% Share</span>
           </div>
         </div>
         <a href="../driving-care-app/index.html" target="_blank" class="btn" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px; background:rgba(16,185,129,0.15); color:#10b981; border:1px solid #10b981; padding:8px 14px; border-radius:10px; font-weight:700; font-size:0.85rem;">
@@ -1196,14 +1196,14 @@ body {
   <!-- Main Dashboard Container -->
   <main class="main-container">
     <!-- Quick Statistics Grid -->
-    <section class="stats-grid">
+    <section class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));">
       <div class="stat-card stat-total">
         <div class="stat-header">
-          <span class="stat-title">Total Drivers</span>
+          <span class="stat-title">Total Licenses Sold</span>
           <span class="stat-icon">👥</span>
         </div>
         <div class="stat-value" id="totalDriversCount">0</div>
-        <div class="stat-subtext">Registered across Saudi Arabia</div>
+        <div class="stat-subtext">Total Drivers Added</div>
       </div>
 
       <div class="stat-card stat-active">
@@ -1212,28 +1212,34 @@ body {
           <span class="stat-icon">🟢</span>
         </div>
         <div class="stat-value" id="activeLicensesCount">0</div>
-        <div class="stat-subtext">30-day active bot access</div>
-      </div>
-
-      <div class="stat-card stat-pending">
-        <div class="stat-header">
-          <span class="stat-title">Expired / Pending</span>
-          <span class="stat-icon">⏳</span>
-        </div>
-        <div class="stat-value" id="expiredLicensesCount">0</div>
-        <div class="stat-subtext">Requires monthly renewal</div>
+        <div class="stat-subtext">Currently Unlocked & Active</div>
       </div>
 
       <div class="stat-card stat-revenue">
         <div class="stat-header">
-          <span class="stat-title">Monthly Revenue</span>
+          <span class="stat-title">Gross Sales Revenue</span>
           <span class="stat-icon">💰</span>
         </div>
         <div class="stat-value" id="totalRevenueSAR">0 <span class="currency">SAR</span></div>
-        <div class="stat-subtext">
-          <span>Ikram (15% Share): </span>
-          <strong id="ikramShareText" class="highlight-share">0 SAR</strong>
+        <div class="stat-subtext">Total Selling Amount (SAR)</div>
+      </div>
+
+      <div class="stat-card" style="border-left: 4px solid #10b981; background: rgba(16, 185, 129, 0.08);">
+        <div class="stat-header">
+          <span class="stat-title" style="color: #34d399; font-weight: 700;">My Share (Profit)</span>
+          <span class="stat-icon">💵</span>
         </div>
+        <div class="stat-value" id="ikramShareText" style="color: #34d399;">0 SAR</div>
+        <div class="stat-subtext" id="myShareSubtext">30% - 40% Commission</div>
+      </div>
+
+      <div class="stat-card" style="border-left: 4px solid #3b82f6; background: rgba(59, 130, 246, 0.08);">
+        <div class="stat-header">
+          <span class="stat-title" style="color: #60a5fa; font-weight: 700;">Client Share</span>
+          <span class="stat-icon">🤝</span>
+        </div>
+        <div class="stat-value" id="clientShareText" style="color: #60a5fa;">0 SAR</div>
+        <div class="stat-subtext">Client Retained Profit</div>
       </div>
     </section>
 
@@ -1280,11 +1286,11 @@ body {
           <thead>
             <tr>
               <th>Driver Details</th>
-              <th>City</th>
-              <th>License Key</th>
+              <th>Seller & Region</th>
+              <th>License Key & Device</th>
+              <th>Selling Price & Split</th>
               <th>Status & Validity</th>
               <th>Remaining Time</th>
-              <th>Monthly Fee</th>
               <th class="text-right">Actions</th>
             </tr>
           </thead>
@@ -1337,24 +1343,24 @@ body {
 
       <div class="info-card">
         <div class="info-card-header">
-          <h3>🤝 Revenue Partnership (Deal Terms)</h3>
-          <span class="tag tag-green">70,000 PKR + 15% Share</span>
+          <h3>🤝 Reseller & Sales Commission Tracking</h3>
+          <span class="tag tag-green">30% - 40% Share per Sold License</span>
         </div>
         <div class="partnership-box">
-          <p><strong>Owner:</strong> Bilal (Receives full driver subscription fees directly in Saudi Arabia).</p>
-          <p><strong>Technical Partner:</strong> Ikram (Maintains cloud license server, app updates, and bot anti-ban optimizations).</p>
+          <p><strong>Reseller:</strong> Client KSA (Sells licenses directly to Saudi drivers at 30, 40, or 50 SAR/month).</p>
+          <p><strong>Technical Partner:</strong> Developer Ikram (Receives 30% or 40% commission per active driver sold).</p>
           <div class="revenue-highlight">
             <div>
-              <span class="lbl">Milestone 1 (Testing Demo):</span>
-              <span class="val">35,000 PKR (50%)</span>
+              <span class="lbl">Per Driver Sale (30 SAR):</span>
+              <span class="val text-emerald">My Share: 9 SAR (30%) / 12 SAR (40%)</span>
             </div>
             <div>
-              <span class="lbl">Milestone 2 (Go-Live Handover):</span>
-              <span class="val">35,000 PKR (50%)</span>
+              <span class="lbl">Per Driver Sale (40 SAR):</span>
+              <span class="val text-emerald">My Share: 12 SAR (30%) / 16 SAR (40%)</span>
             </div>
             <div>
-              <span class="lbl">Monthly Royalty per Driver:</span>
-              <span class="val text-emerald">15% Recurring</span>
+              <span class="lbl">Per Driver Sale (50 SAR):</span>
+              <span class="val text-emerald">My Share: 15 SAR (30%) / 20 SAR (40%)</span>
             </div>
           </div>
         </div>
@@ -1370,9 +1376,15 @@ body {
         <button id="closeModalBtn" class="close-btn">&times;</button>
       </div>
       <form id="driverForm">
-        <div class="form-group">
-          <label for="driverName">Driver Full Name *</label>
-          <input type="text" id="driverName" placeholder="e.g. Tariq Khan" required>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="driverSeller">Seller / Reseller Name *</label>
+            <input type="text" id="driverSeller" value="Client KSA" placeholder="e.g. Client KSA / Bilal" required>
+          </div>
+          <div class="form-group">
+            <label for="driverName">Driver Full Name *</label>
+            <input type="text" id="driverName" placeholder="e.g. Tariq Khan" required>
+          </div>
         </div>
 
         <div class="form-row">
@@ -1403,8 +1415,30 @@ body {
             </div>
           </div>
           <div class="form-group">
-            <label for="driverFee">Monthly Subscription (SAR)</label>
-            <input type="number" id="driverFee" value="150" min="50" step="10">
+            <label for="driverSalePrice">Sale Price per Driver (SAR)</label>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <input type="number" id="driverSalePrice" value="40" min="10" step="5" style="flex: 1;" required>
+              <button type="button" class="btn btn-sm btn-outline" onclick="portal.setPricePreset(30)" style="padding: 6px 8px;">30</button>
+              <button type="button" class="btn btn-sm btn-outline" onclick="portal.setPricePreset(40)" style="padding: 6px 8px;">40</button>
+              <button type="button" class="btn btn-sm btn-outline" onclick="portal.setPricePreset(50)" style="padding: 6px 8px;">50</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group" style="background: rgba(16,185,129,0.08); padding: 12px; border-radius: 10px; border: 1px solid rgba(16,185,129,0.25);">
+          <label style="margin-bottom: 8px; font-weight: 700; color: #10b981;">My Commission Share Percentage:</label>
+          <div style="display: flex; gap: 16px; margin-bottom: 10px;">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #fff;">
+              <input type="radio" name="commissionPercent" value="30" checked onchange="portal.updateProfitPreview()">
+              <span><strong>30% Share</strong> (Standard)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #fff;">
+              <input type="radio" name="commissionPercent" value="40" onchange="portal.updateProfitPreview()">
+              <span><strong>40% Share</strong> (High Tier)</span>
+            </label>
+          </div>
+          <div id="calcPreviewBox" style="font-size: 0.85rem; font-weight: 600; color: #cbd5e1; background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 6px;">
+            Selling: 40 SAR ➔ <strong>My Share: 12.0 SAR (30%)</strong> | Client Share: 28.0 SAR (70%)
           </div>
         </div>
 

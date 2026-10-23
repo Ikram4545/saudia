@@ -104,12 +104,11 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
   // Method Channel to communicate with Native Android Accessibility Service
   static const platform = MethodChannel('com.drivingcare.saudi/accessibility');
 
-  // Strict Licensing State (Fresh Locked by Default)
-  bool isActivated = false; // By default LOCKED until key or trial is entered
+  // Strict Licensing State (Fresh Locked by Default - License Key Only)
+  bool isActivated = false; // By default LOCKED until key is entered
   String licenseKey = '';
   String driverName = 'Driver';
   String expiryDisplay = '';
-  DateTime? trialExpiresAt;
   bool isTrial = false;
   String lockReason = ''; // If suspended by admin
 
@@ -176,15 +175,14 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
   List<String> avoidWords = [];
   List<String> likedWords = ['KAFD', 'Al Malqa', 'Al Olaya'];
 
-  // Live Domain Server Connection
-  String serverUrl = 'https://saudia.pixeltrio.com';
+  // Backend Server Connection (Local / Domain)
+  String serverUrl = 'http://10.0.2.2:8000';
   bool isServerConnected = false;
   Timer? _heartbeatTimer;
-  Timer? _countdownTimer;
 
-  // Developer Info (Ikram)
-  final String devName = 'Ikram';
-  final String devPhone = '03113154649';
+  // Support Info (Saudi Client Support)
+  String devName = 'Official Support';
+  String devPhone = '+966534199549';
 
   final List<Map<String, dynamic>> orderHistory = [];
   String currentDeviceId = '';
@@ -194,6 +192,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _initDeviceId();
+    _loadAppConfig();
     // Load the native flags + cached license FIRST, then push one combined sync.
     // This way an engine OFF chosen from the floating button is respected at
     // app start instead of being forced back ON.
@@ -217,11 +216,119 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
     } catch (_) {}
   }
 
+  Future<void> _loadAppConfig() async {
+    try {
+      final config = await platform.invokeMethod<Map>('loadAppConfig');
+      if (config != null && mounted) {
+        setState(() {
+          final p = config['support_phone']?.toString();
+          if (p != null && p.isNotEmpty) devPhone = p;
+          final u = config['server_url']?.toString();
+          if (u != null && u.isNotEmpty) serverUrl = u;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveAppConfig(String newPhone, String newServerUrl) async {
+    try {
+      await platform.invokeMethod('saveAppConfig', {
+        'phone': newPhone,
+        'server_url': newServerUrl,
+      });
+      if (mounted) {
+        setState(() {
+          devPhone = newPhone;
+          serverUrl = newServerUrl;
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _showSupportConfigDialog() {
+    final phoneCtrl = TextEditingController(text: devPhone);
+    final serverCtrl = TextEditingController(text: serverUrl);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Row(
+          children: [
+            Icon(Icons.tune_rounded, color: Color(0xFF2563EB), size: 24),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text('Support & Server Settings', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Apna WhatsApp support number ya backend server URL yahan tabdeel kar sakte hain:',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: phoneCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: InputDecoration(
+                  labelText: 'WhatsApp Support Number',
+                  hintText: '+966534199549',
+                  prefixIcon: const Icon(Icons.phone_android_rounded),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: serverCtrl,
+                decoration: InputDecoration(
+                  labelText: 'Server URL (Local ya Online)',
+                  hintText: 'http://10.0.2.2:8000',
+                  prefixIcon: const Icon(Icons.dns_rounded),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2563EB),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              final newPhone = phoneCtrl.text.trim();
+              final newUrl = serverCtrl.text.trim();
+              if (newPhone.isNotEmpty) {
+                _saveAppConfig(newPhone, newUrl);
+                Navigator.of(ctx).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    backgroundColor: Color(0xFF10B981),
+                    content: Text('Support Number aur Server Settings save ho gayi ✔'),
+                  ),
+                );
+              }
+            },
+            child: const Text('Save Settings'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _heartbeatTimer?.cancel();
-    _countdownTimer?.cancel();
     _keyController.dispose();
     super.dispose();
   }
@@ -439,6 +546,10 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
       final result = await platform.invokeMethod<Map>('loadLicenseCache');
       if (result != null && result['key'] != null) {
         final key = result['key'].toString();
+        // Strict: Disallow any old trial keys from cache
+        if (key.toUpperCase().contains('TRIAL')) {
+          return;
+        }
         final name = result['name']?.toString() ?? 'Driver';
         final days = result['days'] is int ? result['days'] as int : 30;
         final savedAt = result['savedAt'] is int ? result['savedAt'] as int : 0;
@@ -535,35 +646,13 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
   }
 
   void _startTimers() {
-    // 1. Heartbeat every 15s to verify key against Ikram's Laptop Admin Panel
+    // 1. Heartbeat every 15s to verify key against Admin Panel
     _heartbeatTimer?.cancel();
     _heartbeatTimer = Timer.periodic(const Duration(seconds: 15), (t) {
       if (isActivated) {
         _sendHeartbeatCheck();
       } else {
         _pingServer();
-      }
-    });
-
-    // 2. Countdown timer to check 24-48 hours trial expiry every 10 seconds
-    _countdownTimer?.cancel();
-    _countdownTimer = Timer.periodic(const Duration(seconds: 10), (t) {
-      if (isActivated && isTrial && trialExpiresAt != null) {
-        final remaining = trialExpiresAt!.difference(DateTime.now());
-        if (remaining.isNegative) {
-          // TRIAL EXPIRED! Self-Lock immediately!
-          setState(() {
-            isActivated = false;
-            lockReason = 'Aapka 24 se 48 ghantay ka testing trial khatam ho chuka hai.';
-          });
-          _syncSettingsToNativeService(engineOn: false);
-        } else {
-          setState(() {
-            final hours = remaining.inHours;
-            final mins = remaining.inMinutes % 60;
-            expiryDisplay = '${hours}h ${mins}m Baqi Hain';
-          });
-        }
       }
     });
   }
@@ -823,11 +912,11 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
     } catch (_) {}
   }
 
-  // Direct WhatsApp contact with Ikram
+  // Direct WhatsApp contact with Support
   Future<void> _openWhatsAppContact({String customMsg = ''}) async {
     final msg = customMsg.isNotEmpty
         ? customMsg
-        : 'Assalam-o-Alaikum Ikram bhai, mujhe Driving Care app ki License Key chahiye.';
+        : 'Assalam-o-Alaikum, mujhe Driving Care app ki License Key chahiye.';
     try {
       await platform.invokeMethod('openWhatsApp', {
         'phone': devPhone,
@@ -903,7 +992,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
             // ONLY lock when admin EXPLICITLY revokes access on the server
             setState(() {
               isActivated = false;
-              lockReason = 'Admin (Ikram) ne aapka access suspend / lock kar diya hai.';
+              lockReason = 'Admin ne aapka access suspend / lock kar diya hai.';
             });
             _syncSettingsToNativeService(engineOn: false);
             try {
@@ -1094,82 +1183,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
     }
   }
 
-  // Start 48-Hour Trial (With countdown & automatic self-destruct lock)
-  // Trial ab device-bound hai: ek phone = ek hi trial (server deviceId se yaad rakhta hai).
-  Future<void> _startTrial() async {
-    final now = DateTime.now();
-    final expireDate = now.add(const Duration(hours: 48));
 
-    if (currentDeviceId.isEmpty) {
-      try {
-        currentDeviceId = await platform.invokeMethod<String>('getDeviceId') ?? 'UNKNOWN_DEVICE';
-      } catch (_) {
-        currentDeviceId = 'UNKNOWN_DEVICE';
-      }
-    }
-
-    try {
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
-      final uri = Uri.parse('$serverUrl/api/trial');
-      final request = await client.postUrl(uri);
-      request.headers.contentType = ContentType.json;
-      request.write(jsonEncode({
-        'device': 'Android ($currentDeviceId)',
-        'deviceId': currentDeviceId,
-        'phone': 'Pending Trial',
-      }));
-      final response = await request.close();
-      final bodyStr = await response.transform(utf8.decoder).join();
-      final data = jsonDecode(bodyStr);
-
-      // Server ne is phone ka trial pehle se used qarar diya — dobara trial NAHI milega.
-      if (data is Map && data['success'] == false) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              backgroundColor: const Color(0xFFEF4444),
-              content: Text(data['message']?.toString() ?? 'Is phone par trial pehle use ho chuka hai.'),
-            ),
-          );
-        }
-        return;
-      }
-
-      if (mounted) {
-        setState(() {
-          isActivated = true;
-          isTrial = true;
-          trialExpiresAt = expireDate;
-          licenseKey = data['driver']?['key'] ?? 'TRIAL-48H';
-          driverName = 'Trial User';
-          expiryDisplay = '48 Hours Remaining';
-          lockReason = '';
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          isActivated = true;
-          isTrial = true;
-          trialExpiresAt = expireDate;
-          licenseKey = 'TRIAL-48H';
-          driverName = 'Trial User';
-          expiryDisplay = '48 Hours Remaining';
-          lockReason = '';
-        });
-      }
-    }
-
-    _syncSettingsToNativeService(engineOn: true);
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        backgroundColor: Color(0xFF10B981),
-        content: Text('48-Ghantay Ka Trial Shuru! Enjoy full access.'),
-      ),
-    );
-  }
 
 
   void _showOrderHistory() {
@@ -1296,11 +1310,17 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
         ),
         actions: [
           IconButton(
+            tooltip: 'Support & Server Settings',
+            icon: const Icon(Icons.tune_rounded),
+            onPressed: _showSupportConfigDialog,
+          ),
+          IconButton(
             tooltip: 'Toggle Black/White Theme',
             icon: Icon(isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded),
             onPressed: widget.onToggleTheme,
           ),
           IconButton(
+            tooltip: 'Refresh Status',
             icon: const Icon(Icons.refresh_rounded),
             onPressed: () {
               _checkNativeAccessibilityStatus();
@@ -1444,37 +1464,12 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
                     ),
                   ),
                 ),
-                const SizedBox(height: 14),
-                const Center(
-                  child: Text(
-                    '— YA —',
-                    style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF10B981),
-                      side: const BorderSide(color: Color(0xFF10B981), width: 1.5),
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    icon: const Icon(Icons.timer_outlined, size: 20),
-                    label: const Text(
-                      'START 24-48 HOUR TRIAL',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    onPressed: _startTrial,
-                  ),
-                ),
               ],
             ),
           ),
           const SizedBox(height: 20),
 
-          // Contact Developer Card (Ikram)
+          // Contact Support Card
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -1505,11 +1500,16 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Developer: $devName\nWhatsApp: $devPhone',
+                            '$devName\nWhatsApp: $devPhone',
                             style: const TextStyle(fontSize: 12, color: Colors.grey),
                           ),
                         ],
                       ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.edit_note_rounded, color: Colors.grey, size: 26),
+                      tooltip: 'Change Support Number',
+                      onPressed: _showSupportConfigDialog,
                     ),
                   ],
                 ),
@@ -1524,9 +1524,9 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     icon: const Icon(Icons.chat_bubble_outline_rounded, size: 20),
-                    label: Text(
-                      'Contact $devName on WhatsApp',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    label: const Text(
+                      'Contact Support on WhatsApp',
+                      style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     onPressed: () => _openWhatsAppContact(),
                   ),
@@ -1606,28 +1606,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
               ),
             ),
 
-          // Trial / Expiry Banner
-          if (isTrial)
-            Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-              decoration: BoxDecoration(
-                color: Colors.amber.shade700,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.hourglass_top_rounded, color: Colors.white, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      '⏳ 24-48h Trial Active: $expiryDisplay',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+
 
           // Live Engine & Permissions Status Card (Fix 6: Real status from OS)
           Container(

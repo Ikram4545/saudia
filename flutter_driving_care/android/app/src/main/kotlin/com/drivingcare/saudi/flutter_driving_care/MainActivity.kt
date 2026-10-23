@@ -257,11 +257,13 @@ class MainActivity : FlutterActivity() {
                     }
                 }
                 "openWhatsApp" -> {
-                    val phone = call.argument<String>("phone") ?: "03113154649"
-                    val message = call.argument<String>("message") ?: "Assalam-o-Alaikum Ikram bhai"
+                    val phone = call.argument<String>("phone") ?: "+966534199549"
+                    val message = call.argument<String>("message") ?: "Assalam-o-Alaikum, mujhe Driving Care app ki License Key chahiye."
                     try {
                         val cleanPhone = phone.replace("+", "").replace("-", "").replace(" ", "").trim()
-                        val formattedPhone = if (cleanPhone.startsWith("0")) "92" + cleanPhone.substring(1) else cleanPhone
+                        val formattedPhone = if (cleanPhone.startsWith("05")) "966" + cleanPhone.substring(1)
+                                            else if (cleanPhone.startsWith("0")) "92" + cleanPhone.substring(1)
+                                            else cleanPhone
                         val url = "https://api.whatsapp.com/send?phone=$formattedPhone&text=${java.net.URLEncoder.encode(message, "UTF-8")}"
                         val intent = Intent(Intent.ACTION_VIEW)
                         intent.data = Uri.parse(url)
@@ -270,6 +272,32 @@ class MainActivity : FlutterActivity() {
                         result.success(true)
                     } catch (e: Exception) {
                         result.error("WHATSAPP_ERROR", e.message, null)
+                    }
+                }
+                "saveAppConfig" -> {
+                    try {
+                        val phone = call.argument<String>("phone") ?: ""
+                        val serverUrl = call.argument<String>("server_url") ?: ""
+                        val prefs = getSharedPreferences("DrivingCareAppConfig", Context.MODE_PRIVATE)
+                        prefs.edit().apply {
+                            if (phone.isNotEmpty()) putString("support_phone", phone)
+                            if (serverUrl.isNotEmpty()) putString("server_url", serverUrl)
+                            apply()
+                        }
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("CONFIG_ERROR", e.message, null)
+                    }
+                }
+                "loadAppConfig" -> {
+                    try {
+                        val prefs = getSharedPreferences("DrivingCareAppConfig", Context.MODE_PRIVATE)
+                        val map = HashMap<String, String>()
+                        map["support_phone"] = prefs.getString("support_phone", "+966534199549") ?: "+966534199549"
+                        map["server_url"] = prefs.getString("server_url", "http://10.0.2.2:8000") ?: ""
+                        result.success(map)
+                    } catch (e: Exception) {
+                        result.error("CONFIG_ERROR", e.message, null)
                     }
                 }
                 "saveLicenseCache" -> {

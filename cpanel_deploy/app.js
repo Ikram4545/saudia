@@ -8,47 +8,51 @@ const SAR_TO_PKR_RATE = 74.5; // Approximate exchange rate
 const DEFAULT_DRIVERS = [
   {
     id: 'd1',
+    sellerName: 'Client KSA',
     name: 'Tariq Al-Harbi',
     phone: '+966 50 491 8821',
     city: 'Riyadh',
     key: 'DC-8921',
-    feeSAR: 150,
-    status: 'active', // active, pending, expired
-    activatedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 days ago
-    expiresAt: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000).toISOString(), // 25 days left
+    salePrice: 40,
+    feeSAR: 40,
+    commissionPercent: 30,
+    myShare: 12.0,
+    clientShare: 28.0,
+    status: 'active',
+    activatedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    expiresAt: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000).toISOString(),
   },
   {
     id: 'd2',
+    sellerName: 'Client KSA',
     name: 'Fahad Saeed',
     phone: '+966 55 128 9034',
     city: 'Jeddah',
     key: 'DC-7740',
-    feeSAR: 150,
+    salePrice: 50,
+    feeSAR: 50,
+    commissionPercent: 40,
+    myShare: 20.0,
+    clientShare: 30.0,
     status: 'active',
-    activatedAt: new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString(), // 28 days ago
-    expiresAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days left (Expiring soon)
+    activatedAt: new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString(),
+    expiresAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
   },
   {
     id: 'd3',
+    sellerName: 'Bilal Reseller',
     name: 'Muhammad Asif',
     phone: '+966 53 874 1120',
     city: 'Riyadh',
     key: 'asif30',
-    feeSAR: 150,
+    salePrice: 30,
+    feeSAR: 30,
+    commissionPercent: 30,
+    myShare: 9.0,
+    clientShare: 21.0,
     status: 'expired',
     activatedAt: new Date(Date.now() - 35 * 24 * 60 * 60 * 1000).toISOString(),
-    expiresAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), // Expired 5 days ago
-  },
-  {
-    id: 'd4',
-    name: 'Abdulrahman Al-Dosari',
-    phone: '+966 56 312 9945',
-    city: 'Dammam',
-    key: 'DC-4412',
-    feeSAR: 150,
-    status: 'pending',
-    activatedAt: null,
-    expiresAt: null
+    expiresAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
   }
 ];
 
@@ -198,7 +202,11 @@ class DrivingCarePortal {
     this.driverPhoneInput = document.getElementById('driverPhone');
     this.driverCityInput = document.getElementById('driverCity');
     this.driverKeyInput = document.getElementById('driverKey');
-    this.driverFeeInput = document.getElementById('driverFee');
+    this.driverSellerInput = document.getElementById('driverSeller');
+    this.driverSalePriceInput = document.getElementById('driverSalePrice');
+    this.driverFeeInput = document.getElementById('driverFee') || this.driverSalePriceInput;
+    this.calcPreviewBox = document.getElementById('calcPreviewBox');
+    this.clientShareText = document.getElementById('clientShareText');
     this.regenerateKeyBtn = document.getElementById('regenerateKeyBtn');
 
     // Simulator Modal
@@ -262,10 +270,30 @@ class DrivingCarePortal {
     this.driverKeyInput.value = `DC-${rand}`;
   }
 
+  setPricePreset(price) {
+    if (this.driverSalePriceInput) {
+      this.driverSalePriceInput.value = price;
+      this.updateProfitPreview();
+    }
+  }
+
+  updateProfitPreview() {
+    const price = parseFloat(this.driverSalePriceInput?.value) || 40;
+    const commInput = document.querySelector('input[name="commissionPercent"]:checked');
+    const comm = parseFloat(commInput ? commInput.value : 30);
+    const myShare = (price * (comm / 100)).toFixed(1);
+    const clientShare = (price - myShare).toFixed(1);
+    if (this.calcPreviewBox) {
+      this.calcPreviewBox.innerHTML = `Selling: <strong>${price} SAR</strong> ➔ <strong>My Share: ${myShare} SAR (${comm}%)</strong> | Client Share: <strong>${clientShare} SAR (${100 - comm}%)</strong>`;
+    }
+  }
+
   openAddModal() {
     this.driverForm.reset();
     this.generateRandomKey();
-    this.driverFeeInput.value = '150';
+    if (this.driverSellerInput) this.driverSellerInput.value = 'Client KSA';
+    if (this.driverSalePriceInput) this.driverSalePriceInput.value = '40';
+    this.updateProfitPreview();
     this.driverModal.style.display = 'flex';
   }
 
@@ -274,11 +302,16 @@ class DrivingCarePortal {
   }
 
   handleSaveDriver() {
+    const sellerName = this.driverSellerInput ? (this.driverSellerInput.value.trim() || 'Client KSA') : 'Client KSA';
     const name = this.driverNameInput.value.trim();
     const phone = this.driverPhoneInput.value.trim();
     const city = this.driverCityInput.value;
     const key = this.driverKeyInput.value.trim();
-    const feeSAR = parseFloat(this.driverFeeInput.value) || 150;
+    const salePrice = parseFloat(this.driverSalePriceInput ? this.driverSalePriceInput.value : (this.driverFeeInput ? this.driverFeeInput.value : 40)) || 40;
+    const commInput = document.querySelector('input[name="commissionPercent"]:checked');
+    const commissionPercent = parseFloat(commInput ? commInput.value : 30);
+    const myShare = Math.round(salePrice * (commissionPercent / 100) * 10) / 10;
+    const clientShare = Math.round((salePrice - myShare) * 10) / 10;
     const initialStatus = document.querySelector('input[name="initialStatus"]:checked').value;
 
     if (!name || !phone || !key) {
@@ -305,11 +338,16 @@ class DrivingCarePortal {
 
     const newDriver = {
       id: 'd_' + Date.now(),
+      sellerName,
       name,
       phone,
       city,
       key,
-      feeSAR,
+      salePrice,
+      feeSAR: salePrice,
+      commissionPercent,
+      myShare,
+      clientShare,
       status: initialStatus,
       activatedAt,
       expiresAt
@@ -328,7 +366,7 @@ class DrivingCarePortal {
         'Content-Type': 'application/json',
         'X-Admin-Token': this.adminToken || localStorage.getItem('dc_admin_token') || ''
       },
-      body: JSON.stringify({ name, phone, city, key, days: 30 })
+      body: JSON.stringify({ name, phone, city, key, days: 30, sellerName, salePrice, commissionPercent, myShare, clientShare })
     })
     .then(r => r.json())
     .then(data => {
@@ -599,25 +637,40 @@ Support WhatsApp: Bilal (+966 53 419 9549)`;
 
     const now = new Date();
 
+    let totalMyShareSAR = 0;
+    let totalClientShareSAR = 0;
+
     this.drivers.forEach(d => {
+      const price = parseFloat(d.salePrice || d.feeSAR || 40);
+      const comm = parseFloat(d.commissionPercent || 30);
+      const myP = d.myShare !== undefined ? parseFloat(d.myShare) : (price * (comm / 100));
+      const clientP = d.clientShare !== undefined ? parseFloat(d.clientShare) : (price - myP);
+
       if (d.status === 'pending') {
         pending++;
       } else {
         const exp = d.expiresAt ? new Date(d.expiresAt) : null;
         if (exp && exp > now) {
           active++;
-          totalRevSAR += (d.feeSAR || 150);
+          totalRevSAR += price;
+          totalMyShareSAR += myP;
+          totalClientShareSAR += clientP;
           const daysLeft = (exp - now) / (24 * 60 * 60 * 1000);
           if (daysLeft <= 3) expiring++;
         } else {
           expired++;
+          // Still count historical revenue if sold
+          totalRevSAR += price;
+          totalMyShareSAR += myP;
+          totalClientShareSAR += clientP;
         }
       }
     });
 
-    // Financial calculation (Ikram's 15% Share)
-    const ikramShareSAR = Math.round(totalRevSAR * 0.15);
+    // Financial calculations (30% - 40% Share)
+    const ikramShareSAR = Math.round(totalMyShareSAR);
     const ikramSharePKR = Math.round(ikramShareSAR * SAR_TO_PKR_RATE);
+    const clientShareSAR = Math.round(totalClientShareSAR);
 
     // Update DOM stats
     this.totalDriversCount.textContent = total;
@@ -625,6 +678,9 @@ Support WhatsApp: Bilal (+966 53 419 9549)`;
     this.expiredLicensesCount.textContent = `${expired + pending}`;
     this.totalRevenueSAR.innerHTML = `${totalRevSAR.toLocaleString()} <span class="currency">SAR</span>`;
     this.ikramShareText.textContent = `${ikramShareSAR.toLocaleString()} SAR (~${ikramSharePKR.toLocaleString()} PKR)`;
+    if (this.clientShareText) {
+      this.clientShareText.textContent = `${clientShareSAR.toLocaleString()} SAR`;
+    }
 
     // Update Counts on Filter Tabs
     this.countAll.textContent = total;
@@ -697,18 +753,30 @@ Support WhatsApp: Bilal (+966 53 419 9549)`;
                 <div class="driver-name">${d.name}</div>
                 <div class="driver-phone">
                   ${d.phone}
-                  <a href="${waUrl}" target="_blank" class="wa-link" title="Open WhatsApp">💬 Chat</a>
+                  <a href="${waUrl}" target="_blank" class="wa-link" title="Open WhatsApp">💬 WhatsApp</a>
                 </div>
               </div>
             </div>
           </td>
-          <td><strong>${d.city}</strong></td>
+          <td>
+            <strong style="color: #60a5fa;">👤 ${d.sellerName || 'Client KSA'}</strong>
+            <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 2px;">📍 ${d.city}</div>
+          </td>
           <td>
             <span class="key-code" onclick="portal.copyKey('${d.signedKey || d.key}')" title="Click to copy activation key">
               🔑 ${d.key} ${d.signedKey ? '<span style="font-size: 0.65rem; background: #10b981; color: #fff; padding: 2px 6px; border-radius: 4px; margin-left: 4px; font-weight: 700;">Signed ✔</span>' : ''}
             </span>
             <div style="font-size: 0.72rem; color: #94a3b8; margin-top: 4px;">
-              📱 Bound: <strong style="color: ${d.boundDeviceId ? '#10b981' : '#f59e0b'}">${d.boundDeviceId ? d.boundDeviceId.substring(0, 12) + '...' : 'Not Bound'}</strong>
+              📱 Device: <strong style="color: ${d.boundDeviceId ? '#10b981' : '#f59e0b'}">${d.boundDeviceId ? d.boundDeviceId.substring(0, 10) + '...' : 'Available'}</strong>
+            </div>
+          </td>
+          <td>
+            <div style="font-size: 0.95rem; font-weight: 800; color: #fff;">${d.salePrice || d.feeSAR || 40} SAR</div>
+            <div style="font-size: 0.75rem; color: #34d399; font-weight: 700; margin-top: 2px;">
+              My Profit: ${(d.myShare !== undefined ? d.myShare : ((d.salePrice || 40) * 0.3)).toFixed(0)} SAR (${d.commissionPercent || 30}%)
+            </div>
+            <div style="font-size: 0.72rem; color: #94a3b8;">
+              Client Share: ${(d.clientShare !== undefined ? d.clientShare : ((d.salePrice || 40) * 0.7)).toFixed(0)} SAR
             </div>
           </td>
           <td>
@@ -724,10 +792,6 @@ Support WhatsApp: Bilal (+966 53 419 9549)`;
                 <div class="progress-fill ${rem.pillClass}" style="width: ${rem.percent}%"></div>
               </div>
             ` : ''}
-          </td>
-          <td>
-            <strong>${d.feeSAR} SAR</strong>
-            <div style="font-size: 0.72rem; color: var(--accent-emerald);">Dev: ${(d.feeSAR * 0.15).toFixed(0)} SAR</div>
           </td>
           <td class="text-right">
             <div class="action-btns">
@@ -781,13 +845,18 @@ Support WhatsApp: Bilal (+966 53 419 9549)`;
           if (data && data.drivers) {
             this.drivers = data.drivers.map((d, index) => ({
               id: 'd_' + index,
+              sellerName: d.sellerName || 'Client KSA',
               name: d.name,
               phone: d.phone,
               city: d.city,
               key: d.key,
               signedKey: d.signedKey || null,
               boundDeviceId: d.boundDeviceId || null,
-              feeSAR: 150,
+              salePrice: d.salePrice || d.feeSAR || 40,
+              feeSAR: d.salePrice || d.feeSAR || 40,
+              commissionPercent: d.commissionPercent || 30,
+              myShare: d.myShare !== undefined ? d.myShare : (d.salePrice || 40) * 0.3,
+              clientShare: d.clientShare !== undefined ? d.clientShare : (d.salePrice || 40) * 0.7,
               status: d.status,
               online: d.online,
               device: d.device || 'Android Phone',
