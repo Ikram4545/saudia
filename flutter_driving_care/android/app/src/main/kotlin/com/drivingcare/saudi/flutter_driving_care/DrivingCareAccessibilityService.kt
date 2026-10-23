@@ -142,19 +142,15 @@ class DrivingCareAccessibilityService : AccessibilityService() {
         "submit offer"
     )
 
-    // Swipe keywords for slider buttons
-    private val swipeKeywords = listOf(
+    // Swipe keywords for slider buttons (explicit phrases only so normal buttons are never swiped)
+    private val explicitSwipeKeywords = listOf(
         "اسحب للقبول",
         "اسحب للتأكيد",
         "اسحب لبدء",
         "مرر للقبول",
         "مرر للتأكيد",
-        "اسحب",
-        "مرر",
         "swipe to accept",
-        "slide to accept",
-        "swipe",
-        "slide"
+        "slide to accept"
     )
 
     // Words indicating driver wallet/balance/earnings — MUST NOT be treated as order price!
@@ -262,9 +258,31 @@ class DrivingCareAccessibilityService : AccessibilityService() {
         val texts = mutableListOf<String>()
         collectAllTexts(rootNode, texts)
         val full = texts.joinToString(" ").lowercase()
-        return acceptKeywords.any { full.contains(it.lowercase()) } ||
-                full.contains("sar") || full.contains("ر.س") || full.contains("ريال") ||
-                full.contains("مشوار") || full.contains("طلب") || full.contains("عرض")
+        return isRealRideOffer(texts) ||
+                full.contains("you'll earn") || full.contains("accept offer") ||
+                full.contains("قبول العرض") || full.contains("طلب جديد")
+    }
+
+    /**
+     * Strictly verifies if the screen contains an ACTIVE ride offer bottom-sheet/card.
+     * Prevents false triggers on map screen, wallet balances, or "You're Online".
+     */
+    private fun isRealRideOffer(texts: List<String>): Boolean {
+        val full = texts.joinToString(" ").lowercase()
+
+        // 1. Must contain an accept trigger phrase
+        val hasAcceptWord = acceptKeywords.any { full.contains(it.lowercase()) }
+        if (!hasAcceptWord) return false
+
+        // 2. Must contain ride offer context (cannot just be map + balance)
+        val hasOfferContext = full.contains("you'll earn") || full.contains("you will earn") ||
+                full.contains("away") || full.contains("bonus") || full.contains("net earning") ||
+                full.contains("priority") || full.contains("city ride") || full.contains("eco") ||
+                full.contains("pickup") || full.contains("dropoff") || full.contains("مشوار") ||
+                full.contains("طلب جديد") || full.contains("عرض جديد") || full.contains("دقيقة") ||
+                full.contains("كم") || full.contains("استلام")
+
+        return hasOfferContext
     }
 
     /**
@@ -275,6 +293,11 @@ class DrivingCareAccessibilityService : AccessibilityService() {
         val texts = mutableListOf<String>()
         collectAllTexts(rootNode, texts)
         if (texts.isEmpty()) return
+
+        // 0. GUARD: Only proceed if this screen is a legitimate ride offer card!
+        if (!isRealRideOffer(texts)) {
+            return
+        }
 
         val rawFullScreenText = texts.joinToString(" ")
         val normalizedText = normalizeArabicDigits(rawFullScreenText).lowercase()
@@ -303,21 +326,9 @@ class DrivingCareAccessibilityService : AccessibilityService() {
             }
         }
 
-        // 2. Parse price from text, excluding driver's personal wallet/balance
-        val extractedPrice = extractOrderPrice(texts)
-        Log.d(TAG, "Extracted Order Price: $extractedPrice SAR (Range: $minPrice - $maxPrice SAR)")
-
-        // 3. Decision Logic:
-        val priceEligible = if (extractedPrice != null) {
-            extractedPrice in minPrice..maxPrice
-        } else {
-            // If price not explicitly found, default to TRUE so driver doesn't miss the ride
-            true
-        }
-
         if (isLocationBlocked) {
             if (autoReject) {
-                val rejectBtn = findButtonByKeywords(rootNode, rejectKeywords)
+                val rejectBtn = findNodeByKeywords(rootNode, rejectKeywords)
                 if (rejectBtn != null) {
                     performClick(rejectBtn, "Auto-Rejected (Blocked Location)")
                     lastActionTime = System.currentTimeMillis()
@@ -326,36 +337,47 @@ class DrivingCareAccessibilityService : AccessibilityService() {
             return
         }
 
-        if (priceEligible) {
-            // 4. Check for Swipe Sliders first
-            val swipeBtn = findButtonByKeywords(rootNode, swipeKeywords)
-            if (swipeBtn != null) {
-                performSwipeGesture(swipeBtn)
-                lastActionTime = System.currentTimeMillis()
-                Log.d(TAG, "Auto-Accepted ride via SWIPE gesture!")
+        // 2. Parse price accurately (Jeeny "You'll earn" or SAR currency)
+        val extractedPrice = extractOrderPrice(texts)
+        Log.d(TAG, "Extracted Order Price: $extractedPrice SAR (Configured Range: $minPrice - $maxPrice SAR)")
+
+        // 3. STRICT Price Decision Logic:
+        if (extractedPrice != null) {
+            if (extractedPrice < minPrice) {
+                Log.d(TAG, "Order price ($extractedPrice SAR) is BELOW minimum limit ($minPrice SAR). SKIPPING.")
+                if (autoReject) {
+                    val rejectBtn = findNodeByKeywords(rootNode, rejectKeywords)
+                    if (rejectBtn != null) {
+                        performClick(rejectBtn, "Auto-Rejected ($extractedPrice SAR < $minPrice SAR)")
+                        lastActionTime = System.currentTimeMillis()
+                    }
+                }
+                // DO NOT ACCEPT, DO NOT SHOW "AUTO-ACCEPTED" TOAST!
                 return
             }
-
-            // 5. Look for Accept Button by keywords & view IDs
-            var acceptBtn = findButtonByKeywords(rootNode, acceptKeywords)
-
-            // 6. If keyword search didn't find button but this is a ride offer, try smart fallback
-            if (acceptBtn == null && hasRideOfferKeywords(rootNode)) {
-                acceptBtn = findOfferActionButtonFallback(rootNode)
+            if (extractedPrice > maxPrice) {
+                Log.d(TAG, "Order price ($extractedPrice SAR) is ABOVE maximum limit ($maxPrice SAR). SKIPPING.")
+                return
             }
+        }
 
-            if (acceptBtn != null) {
-                performClick(acceptBtn, "Auto-Accepted Ride! 🚗⚡")
-                lastActionTime = System.currentTimeMillis()
-                Log.d(TAG, "Auto-Accepted ride successfully!")
-            }
-        } else if (autoReject && extractedPrice != null && extractedPrice < minPrice) {
-            // Price is below minimum requirement -> Auto Reject
-            val rejectBtn = findButtonByKeywords(rootNode, rejectKeywords)
-            if (rejectBtn != null) {
-                performClick(rejectBtn, "Auto-Rejected ($extractedPrice SAR < $minPrice SAR)")
-                lastActionTime = System.currentTimeMillis()
-            }
+        // 4. Check for Swipe Sliders (ONLY if explicit swipe text present)
+        val swipeBtn = findSwipeButton(rootNode)
+        if (swipeBtn != null) {
+            performSwipeGesture(swipeBtn)
+            lastActionTime = System.currentTimeMillis()
+            Log.d(TAG, "Auto-Accepted ride via SWIPE gesture!")
+            return
+        }
+
+        // 5. Look for Accept Button ("Accept Offer" / "قبول" / View IDs) with STRICT bounds
+        val acceptBtn = findAcceptButton(rootNode)
+        if (acceptBtn != null) {
+            performClick(acceptBtn, "Auto-Accepted Ride! 🚗⚡")
+            lastActionTime = System.currentTimeMillis()
+            Log.d(TAG, "Auto-Accepted ride successfully!")
+        } else {
+            Log.w(TAG, "Offer detected but accept button container not found")
         }
     }
 
@@ -382,209 +404,186 @@ class DrivingCareAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * Extracts SAR fare safely while avoiding ratings (4.8 ★), distances (3 km),
-     * and driver's personal wallet/balance (0.00 SAR).
+     * Extracts ride offer fare accurately:
+     * 1. Jeeny English layout ("You'll earn" followed by fare number)
+     * 2. Arabic layout ("ستكسب" / "أرباحك" / "سعر")
+     * 3. General ride fare (SAR / ر.س / ﷼)
+     * Ignores driver's personal wallet/balance lines.
      */
     private fun extractOrderPrice(texts: List<String>): Float? {
-        val candidates = mutableListOf<Float>()
-
+        // Step 1: Look for Jeeny's "You'll earn" block
+        var foundEarn = false
         for (raw in texts) {
-            val normalized = normalizeArabicDigits(raw).lowercase()
-
-            // If this line mentions wallet, balance, or earnings, SKIP it!
-            if (walletKeywords.any { normalized.contains(it) }) {
-                Log.d(TAG, "Skipping wallet/balance text for price extraction: $raw")
+            val t = normalizeArabicDigits(raw).lowercase()
+            if (t.contains("you'll earn") || t.contains("you will earn") || t.contains("ستكسب") || t.contains("أرباحك")) {
+                foundEarn = true
+                val m = Regex("""(\d+(?:\.\d+)?)""").find(t)
+                if (m != null) {
+                    val p = m.groupValues[1].toFloatOrNull()
+                    if (p != null && p > 0f) return p
+                }
                 continue
             }
-
-            // Pattern 1: Number followed by currency (e.g., "25.5 SAR", "30 ر.س", "40 ريال")
-            val regex1 = Regex("""(\d+(?:\.\d+)?)\s*(?:sar|sr|ر\.س|ريال)""", RegexOption.IGNORE_CASE)
-            regex1.findAll(normalized).forEach { match ->
-                val p = match.groupValues[1].toFloatOrNull()
-                if (p != null && p > 0f) candidates.add(p)
-            }
-
-            // Pattern 2: Currency followed by number (e.g., "SAR 25", "ر.س 30", "ريال 40")
-            val regex2 = Regex("""(?:sar|sr|ر\.س|ريال)\s*(\d+(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
-            regex2.findAll(normalized).forEach { match ->
-                val p = match.groupValues[1].toFloatOrNull()
-                if (p != null && p > 0f) candidates.add(p)
+            if (foundEarn) {
+                // Skip VAT / Bonus / fees lines
+                if (t.contains("bonus") || t.contains("fees") || t.contains("vat") || t.contains("ضريبة")) continue
+                // First valid number is the fare (e.g. 8.59, 14.52, 24.23)
+                val m = Regex("""(\d+(?:\.\d+)?)""").find(t)
+                if (m != null) {
+                    val p = m.groupValues[1].toFloatOrNull()
+                    if (p != null && p > 0f) return p
+                }
             }
         }
 
-        if (candidates.isEmpty()) return null
+        // Step 2: General fallback for SAR / currency symbols (excluding wallet balance)
+        val candidates = mutableListOf<Float>()
+        for (raw in texts) {
+            val normalized = normalizeArabicDigits(raw).lowercase()
+            if (walletKeywords.any { normalized.contains(it) }) continue
 
-        // In ride-hailing apps, the offer trip fare is the highest legitimate fare candidate
+            val regex1 = Regex("""(\d+(?:\.\d+)?)\s*(?:sar|sr|ر\.س|ريال|﷼)""", RegexOption.IGNORE_CASE)
+            regex1.findAll(normalized).forEach { match ->
+                match.groupValues[1].toFloatOrNull()?.let { if (it > 0f) candidates.add(it) }
+            }
+
+            val regex2 = Regex("""(?:sar|sr|ر\.س|ريال|﷼)\s*(\d+(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
+            regex2.findAll(normalized).forEach { match ->
+                match.groupValues[1].toFloatOrNull()?.let { if (it > 0f) candidates.add(it) }
+            }
+        }
+
         return candidates.maxOrNull()
     }
 
     /**
-     * Resolves the clickable container node for an inner child node.
+     * Resolves the button container strictly.
+     * Crucial: NEVER climbs past normal button bounds (height 60px to 260px) into the dialog/map root!
      */
-    private fun resolveClickableTarget(node: AccessibilityNodeInfo): AccessibilityNodeInfo {
+    private fun resolveStrictButtonContainer(node: AccessibilityNodeInfo, screenHeight: Int): AccessibilityNodeInfo {
         var current: AccessibilityNodeInfo? = node
-        var bestClickable: AccessibilityNodeInfo? = if (node.isClickable) node else null
+        var bestButton: AccessibilityNodeInfo = node
 
         while (current != null) {
-            if (current.isClickable) {
-                bestClickable = current
+            val r = Rect()
+            current.getBoundsInScreen(r)
+
+            // Button must be in lower half of the screen
+            if (r.top >= screenHeight * 0.45) {
+                // Standard button bounds: height between 60px and 260px, width >= 250px
+                if (r.height() in 60..260 && r.width() >= 250) {
+                    bestButton = current
+                    if (current.isClickable) {
+                        return current // Found the exact clickable button container! Stop climbing immediately!
+                    }
+                }
+            } else if (r.height() > 300) {
+                // Reached dialog card or bottom-sheet root! STOP climbing!
+                break
             }
             val parent = current.parent ?: break
             current = parent
         }
-        return bestClickable ?: node
+        return bestButton
     }
 
     /**
-     * Resolves the best screen bounds (non-zero width & height) by checking node and parent hierarchy.
+     * Finds the Accept Button using keywords and view IDs, strictly bounded to avoid map taps.
      */
-    private fun getBestBounds(node: AccessibilityNodeInfo): Rect {
-        val rect = Rect()
-        node.getBoundsInScreen(rect)
-        if (rect.width() > 20 && rect.height() > 20) {
-            return rect
-        }
-        var parent = node.parent
-        while (parent != null) {
-            val parentRect = Rect()
-            parent.getBoundsInScreen(parentRect)
-            if (parentRect.width() > 20 && parentRect.height() > 20) {
-                return parentRect
-            }
-            parent = parent.parent
-        }
-        return rect
-    }
+    private fun findAcceptButton(rootNode: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        val screenHeight = resources.displayMetrics.heightPixels
 
-    private fun findButtonByKeywords(
-        node: AccessibilityNodeInfo?,
-        keywords: List<String>
-    ): AccessibilityNodeInfo? {
-        if (node == null) return null
-
-        val nodeText = (node.text?.toString() ?: "").lowercase()
-        val contentDesc = (node.contentDescription?.toString() ?: "").lowercase()
-        val viewId = (node.viewIdResourceName ?: "").lowercase()
-
-        // 1. Check text & content description
-        for (kw in keywords) {
-            val k = kw.lowercase()
-            if (nodeText.contains(k) || contentDesc.contains(k)) {
-                return resolveClickableTarget(node)
-            }
+        // 1. Search by Accept Keywords ("Accept Offer", "قبول", "موافق", etc.)
+        val matchedNode = findNodeByKeywords(rootNode, acceptKeywords)
+        if (matchedNode != null) {
+            return resolveStrictButtonContainer(matchedNode, screenHeight)
         }
 
-        // 2. Check Android View ID Resource Name
+        // 2. Search by View IDs
         val acceptIdPatterns = listOf(
-            "accept", "confirm", "take_order", "action_order",
             "btn_accept", "button_accept", "order_accept", "btn_submit",
             "btn_confirm", "ride_accept", "accept_ride", "offer_accept",
-            "bid_button", "action_button", "btn_agree", "positive_button",
-            "primary_button", "btn_action"
+            "bid_button", "action_button", "btn_agree", "btn_action"
         )
-        if (acceptIdPatterns.any { viewId.contains(it) }) {
-            return resolveClickableTarget(node)
+        val matchedById = findNodeByViewIds(rootNode, acceptIdPatterns)
+        if (matchedById != null) {
+            return resolveStrictButtonContainer(matchedById, screenHeight)
         }
 
-        // 3. Recurse children
+        return null
+    }
+
+    /**
+     * Finds swipe button ONLY if explicit swipe text is present on the button
+     */
+    private fun findSwipeButton(rootNode: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        val screenHeight = resources.displayMetrics.heightPixels
+        val matchedNode = findNodeByKeywords(rootNode, explicitSwipeKeywords) ?: return null
+        return resolveStrictButtonContainer(matchedNode, screenHeight)
+    }
+
+    private fun findNodeByKeywords(node: AccessibilityNodeInfo?, keywords: List<String>): AccessibilityNodeInfo? {
+        if (node == null) return null
+        val text = (node.text?.toString() ?: "").lowercase()
+        val desc = (node.contentDescription?.toString() ?: "").lowercase()
+
+        for (kw in keywords) {
+            val k = kw.lowercase()
+            if (text.contains(k) || desc.contains(k)) {
+                return node
+            }
+        }
+
         for (i in 0 until node.childCount) {
-            val found = findButtonByKeywords(node.getChild(i), keywords)
+            val found = findNodeByKeywords(node.getChild(i), keywords)
+            if (found != null) return found
+        }
+        return null
+    }
+
+    private fun findNodeByViewIds(node: AccessibilityNodeInfo?, idPatterns: List<String>): AccessibilityNodeInfo? {
+        if (node == null) return null
+        val viewId = (node.viewIdResourceName ?: "").lowercase()
+
+        if (idPatterns.any { viewId.contains(it) }) {
+            return node
+        }
+
+        for (i in 0 until node.childCount) {
+            val found = findNodeByViewIds(node.getChild(i), idPatterns)
             if (found != null) return found
         }
         return null
     }
 
     /**
-     * Fallback to locate the primary clickable action button on an offer bottom-sheet/dialog
-     */
-    private fun findOfferActionButtonFallback(rootNode: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-        val displayMetrics = resources.displayMetrics
-        val screenHeight = displayMetrics.heightPixels
-        val minButtonY = (screenHeight * 0.40).toInt() // Bottom 60% of screen
-
-        val candidateButtons = mutableListOf<AccessibilityNodeInfo>()
-        collectClickableButtonsInBottomHalf(rootNode, minButtonY, candidateButtons)
-
-        if (candidateButtons.isEmpty()) return null
-
-        // Priority 1: Action button with indicative view ID
-        for (btn in candidateButtons) {
-            val id = (btn.viewIdResourceName ?: "").lowercase()
-            if (id.contains("accept") || id.contains("confirm") || id.contains("order") ||
-                id.contains("agree") || id.contains("offer") || id.contains("action") ||
-                id.contains("btn_main") || id.contains("positive")) {
-                return resolveClickableTarget(btn)
-            }
-        }
-
-        // Priority 2: The largest clickable button in the bottom area (standard primary action button)
-        val best = candidateButtons.maxByOrNull {
-            val r = getBestBounds(it)
-            r.width() * r.height()
-        }
-        return best?.let { resolveClickableTarget(it) }
-    }
-
-    private fun collectClickableButtonsInBottomHalf(
-        node: AccessibilityNodeInfo?,
-        minY: Int,
-        outList: MutableList<AccessibilityNodeInfo>
-    ) {
-        if (node == null) return
-        if (node.isClickable) {
-            val rect = Rect()
-            node.getBoundsInScreen(rect)
-            if (rect.top >= minY && rect.width() >= 100 && rect.height() >= 50) {
-                val text = (node.text?.toString() ?: "").lowercase()
-                val desc = (node.contentDescription?.toString() ?: "").lowercase()
-                val isReject = rejectKeywords.any { text.contains(it) || desc.contains(it) }
-                if (!isReject) {
-                    outList.add(node)
-                }
-            }
-        }
-        for (i in 0 until node.childCount) {
-            collectClickableButtonsInBottomHalf(node.getChild(i), minY, outList)
-        }
-    }
-
-    /**
      * Executes BOTH standard Accessibility Click AND physical touchscreen tap gesture
-     * to guarantee click registration across Jetpack Compose, Flutter, React Native, and native Views.
+     * at the exact button center.
      */
     private fun performClick(node: AccessibilityNodeInfo, toastMsg: String = "Driving Care: Auto-Accepted! 🚗⚡") {
-        val targetNode = resolveClickableTarget(node)
+        val rect = Rect()
+        node.getBoundsInScreen(rect)
 
-        // 1. Accessibility Action Click
+        // 1. Accessibility Action Click directly on target node and immediate parent
         var actionClicked = false
-        if (targetNode.isClickable) {
-            actionClicked = targetNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-        } else {
-            var parent = targetNode.parent
-            while (parent != null) {
-                if (parent.isClickable) {
-                    actionClicked = parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                    if (actionClicked) break
-                }
-                parent = parent.parent
-            }
+        if (node.isClickable) {
+            actionClicked = node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        }
+        if (!actionClicked && node.parent?.isClickable == true) {
+            actionClicked = node.parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)
         }
 
-        // 2. Physical Screen Tap via Gesture Description
-        // Using getBestBounds ensures we tap the true center of the button container, avoiding "aage peeche"
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            val rect = getBestBounds(targetNode)
-            if (rect.width() > 0 && rect.height() > 0) {
-                val clickPath = Path().apply {
-                    moveTo(rect.centerX().toFloat(), rect.centerY().toFloat())
-                }
-                // Crisp 60ms tap to register as pure touch tap (not long-click)
-                val gesture = GestureDescription.Builder()
-                    .addStroke(GestureDescription.StrokeDescription(clickPath, 0, 60))
-                    .build()
-                dispatchGesture(gesture, null, null)
-                Log.d(TAG, "Dispatched physical screen tap at (${rect.centerX()}, ${rect.centerY()}) [actionClicked=$actionClicked, bounds=$rect]")
+        // 2. Physical Screen Touch Tap at Exact Button Center
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && rect.width() > 0 && rect.height() > 0) {
+            val clickPath = Path().apply {
+                moveTo(rect.centerX().toFloat(), rect.centerY().toFloat())
             }
+            // Crisp 50ms tap duration (Pure touch tap, prevents touch cancel or map pan)
+            val gesture = GestureDescription.Builder()
+                .addStroke(GestureDescription.StrokeDescription(clickPath, 0, 50))
+                .build()
+            dispatchGesture(gesture, null, null)
+            Log.d(TAG, "Dispatched physical tap at (${rect.centerX()}, ${rect.centerY()}) [bounds=$rect, actionClicked=$actionClicked]")
         }
 
         // Show Instant Toast on screen so driver sees the bot working!
@@ -600,7 +599,8 @@ class DrivingCareAccessibilityService : AccessibilityService() {
      */
     private fun performSwipeGesture(node: AccessibilityNodeInfo) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            val rect = getBestBounds(node)
+            val rect = Rect()
+            node.getBoundsInScreen(rect)
             if (rect.width() > 40 && rect.height() > 20) {
                 val startX = rect.left.toFloat() + (rect.width() * 0.15f)
                 val endX = rect.right.toFloat() - (rect.width() * 0.15f)
