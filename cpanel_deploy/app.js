@@ -459,8 +459,8 @@ Aap ki "Driving Care" Auto Bot App ki key ready hai:
 3. "Activate App" par click karein.
 4. Settings mein Min Price, Max Price aur Area select karke Bot ON kar lein!
 
-Download APK: https://saudia.pixeltrio.com/download.php
-Support WhatsApp: Bilal (+966 53 419 9549)`;
+Download APK: Driving Care Official APK (v2.5)
+Support WhatsApp: Official Support (+966 53 419 9549)`;
 
     navigator.clipboard.writeText(message).then(() => {
       this.showToast(`WhatsApp message copied for ${d.name}!`);

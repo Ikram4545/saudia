@@ -286,6 +286,44 @@ class DrivingCareAccessibilityService : AccessibilityService() {
     }
 
     /**
+     * Splits complex location names (like "Airport (مطار)") into separate Arabic & English search tokens
+     * so that either language matches the driver screen accurately.
+     */
+    private fun extractLocationKeywords(rawLocation: String): List<String> {
+        val keywords = mutableListOf<String>()
+        val parts = rawLocation.split(Regex("""[()/,\-]"""))
+        for (part in parts) {
+            val clean = part.trim().lowercase()
+            if (clean.length >= 3) {
+                keywords.add(clean)
+            }
+        }
+        val lower = rawLocation.lowercase()
+        if (lower.contains("airport") || lower.contains("مطار")) {
+            keywords.addAll(listOf("airport", "مطار", "المطار", "king khalid"))
+        }
+        if (lower.contains("bat'ha") || lower.contains("batha") || lower.contains("بطحاء")) {
+            keywords.addAll(listOf("batha", "bat'ha", "al batha", "البطحاء", "بطحاء"))
+        }
+        if (lower.contains("shamisi") || lower.contains("شميسي")) {
+            keywords.addAll(listOf("shamisi", "al-shamisi", "al shamisi", "الشميسي", "شميسي"))
+        }
+        if (lower.contains("manfuhah") || lower.contains("منفوحة") || lower.contains("manfuha")) {
+            keywords.addAll(listOf("manfuhah", "manfuha", "منفوحة", "منفوحه"))
+        }
+        if (lower.contains("railway") || lower.contains("قطار")) {
+            keywords.addAll(listOf("railway", "train", "قطار", "محطة القطار", "محطة قطار", "sar station"))
+        }
+        if (lower.contains("safarat") || lower.contains("سفارات")) {
+            keywords.addAll(listOf("safarat", "al safarat", "السفارات", "حي السفارات", "diplomatic"))
+        }
+        if (lower.contains("kafd") || lower.contains("المالي")) {
+            keywords.addAll(listOf("kafd", "كافد", "المالي", "مركز الملك عبدالله المالي"))
+        }
+        return keywords.distinct()
+    }
+
+    /**
      * Scans the driver app window, checks price, pickup time, and blocked locations,
      * and triggers auto-accept or auto-reject.
      */
@@ -309,31 +347,43 @@ class DrivingCareAccessibilityService : AccessibilityService() {
         val blockedLocations = prefs.getStringSet("blocked_locations", emptySet()) ?: emptySet()
         val avoidWords = prefs.getStringSet("avoid_words", emptySet()) ?: emptySet()
 
-        // 1. Check if screen mentions any Blocked Locations or Avoid Words
+        // 1. Check if screen mentions any Blocked Locations or Avoid Words (Split Arabic & English tokens)
         var isLocationBlocked = false
+        var matchedBlockedKeyword = ""
         for (blocked in blockedLocations) {
-            if (blocked.isNotBlank() && normalizedText.contains(blocked.lowercase())) {
-                isLocationBlocked = true
-                Log.d(TAG, "Blocked Location Detected: $blocked")
-                break
+            val keywords = extractLocationKeywords(blocked)
+            for (kw in keywords) {
+                if (kw.isNotBlank() && normalizedText.contains(kw)) {
+                    isLocationBlocked = true
+                    matchedBlockedKeyword = kw
+                    Log.d(TAG, "Blocked Location Detected: '$kw' from rule '$blocked'")
+                    break
+                }
             }
+            if (isLocationBlocked) break
         }
-        for (avoid in avoidWords) {
-            if (avoid.isNotBlank() && normalizedText.contains(avoid.lowercase())) {
-                isLocationBlocked = true
-                Log.d(TAG, "Avoid Word Detected: $avoid")
-                break
+        if (!isLocationBlocked) {
+            for (avoid in avoidWords) {
+                val clean = avoid.trim().lowercase()
+                if (clean.isNotBlank() && normalizedText.contains(clean)) {
+                    isLocationBlocked = true
+                    matchedBlockedKeyword = clean
+                    Log.d(TAG, "Avoid Word Detected: '$clean'")
+                    break
+                }
             }
         }
 
         if (isLocationBlocked) {
+            Log.d(TAG, "Offer SKIPPED: Blocked location matched '$matchedBlockedKeyword'")
             if (autoReject) {
                 val rejectBtn = findNodeByKeywords(rootNode, rejectKeywords)
                 if (rejectBtn != null) {
-                    performClick(rejectBtn, "Auto-Rejected (Blocked Location)")
+                    performClick(rejectBtn, "Auto-Rejected ($matchedBlockedKeyword)")
                     lastActionTime = System.currentTimeMillis()
                 }
             }
+            // CRUCIAL: Immediately stop here! Never accept blocked locations!
             return
         }
 
@@ -342,6 +392,8 @@ class DrivingCareAccessibilityService : AccessibilityService() {
         Log.d(TAG, "Extracted Order Price: $extractedPrice SAR (Configured Range: $minPrice - $maxPrice SAR)")
 
         // 3. STRICT Price Decision Logic:
+        // Rule: 10 se neeche na pakre (4, 5, 7, 8, 9 SAR -> SKIP/REJECT!)
+        // 10 ya us se zyada (10, 11, 12, 13, 50, 100, 150 SAR) -> ACCEPT!
         if (extractedPrice != null) {
             if (extractedPrice < minPrice) {
                 Log.d(TAG, "Order price ($extractedPrice SAR) is BELOW minimum limit ($minPrice SAR). SKIPPING.")
@@ -352,11 +404,25 @@ class DrivingCareAccessibilityService : AccessibilityService() {
                         lastActionTime = System.currentTimeMillis()
                     }
                 }
-                // DO NOT ACCEPT, DO NOT SHOW "AUTO-ACCEPTED" TOAST!
+                // CRUCIAL: STOP HERE! DO NOT ACCEPT LOW FARES!
                 return
             }
             if (extractedPrice > maxPrice) {
                 Log.d(TAG, "Order price ($extractedPrice SAR) is ABOVE maximum limit ($maxPrice SAR). SKIPPING.")
+                return
+            }
+        } else {
+            // Price could not be explicitly parsed. Check if ANY number on screen is below minPrice!
+            val hasLowCandidate = texts.any { t ->
+                val norm = normalizeArabicDigits(t).lowercase()
+                if (!norm.contains("km") && !norm.contains("كم") && !norm.contains("min") && !norm.contains("دقيقة") && !norm.contains("★")) {
+                    val m = Regex("""\b(\d+(?:\.\d+)?)\b""").find(norm)
+                    val num = m?.groupValues?.get(1)?.toFloatOrNull()
+                    num != null && num in 1.0f..(minPrice - 0.01f)
+                } else false
+            }
+            if (hasLowCandidate) {
+                Log.d(TAG, "Screen contains small price amount below $minPrice SAR. SKIPPING for safety.")
                 return
             }
         }
@@ -400,6 +466,10 @@ class DrivingCareAccessibilityService : AccessibilityService() {
         for (i in arabicDigits.indices) {
             result = result.replace(arabicDigits[i], (i + '0'.code).toChar())
         }
+        // Normalize Arabic decimal separators (٫, ،) and commas between digits to standard dot (.)
+        result = result.replace('٫', '.')
+        result = result.replace('،', '.')
+        result = Regex("""(\d+),(\d+)""").replace(result, "$1.$2")
         return result
     }
 
@@ -411,45 +481,90 @@ class DrivingCareAccessibilityService : AccessibilityService() {
      * Ignores driver's personal wallet/balance lines.
      */
     private fun extractOrderPrice(texts: List<String>): Float? {
-        // Step 1: Look for Jeeny's "You'll earn" block
-        var foundEarn = false
-        for (raw in texts) {
-            val t = normalizeArabicDigits(raw).lowercase()
-            if (t.contains("you'll earn") || t.contains("you will earn") || t.contains("ستكسب") || t.contains("أرباحك")) {
-                foundEarn = true
-                val m = Regex("""(\d+(?:\.\d+)?)""").find(t)
-                if (m != null) {
-                    val p = m.groupValues[1].toFloatOrNull()
-                    if (p != null && p > 0f) return p
-                }
-                continue
-            }
-            if (foundEarn) {
-                // Skip VAT / Bonus / fees lines
-                if (t.contains("bonus") || t.contains("fees") || t.contains("vat") || t.contains("ضريبة")) continue
-                // First valid number is the fare (e.g. 8.59, 14.52, 24.23)
-                val m = Regex("""(\d+(?:\.\d+)?)""").find(t)
-                if (m != null) {
-                    val p = m.groupValues[1].toFloatOrNull()
-                    if (p != null && p > 0f) return p
-                }
-            }
-        }
-
-        // Step 2: General fallback for SAR / currency symbols (excluding wallet balance)
         val candidates = mutableListOf<Float>()
+
+        val earningMarkers = listOf(
+            "you'll earn", "you will earn", "earn", "earnings",
+            "ستكسب", "أرباحك", "ارباحك", "ستربح", "أرباح", "ارباح",
+            "أجرة المشوار", "اجرة المشوار", "أجرة الرحلة", "اجرة الرحلة", "الأجرة", "الاجرة",
+            "قيمة المشوار", "قيمة الرحلة", "قيمة الطلب", "سعر المشوار", "سعر الرحلة", "سعر الطلب",
+            "صافي الأرباح", "صافي الارباح", "صافي الربح"
+        )
+
+        val currencyMarkers = listOf(
+            "sar", "sr", "ر.س", "رس", "ريال", "﷼", "ر. س"
+        )
+
+        // Pass 1: Scan for explicit Earning markers and their numbers
+        var markerSeen = false
         for (raw in texts) {
             val normalized = normalizeArabicDigits(raw).lowercase()
             if (walletKeywords.any { normalized.contains(it) }) continue
 
-            val regex1 = Regex("""(\d+(?:\.\d+)?)\s*(?:sar|sr|ر\.س|ريال|﷼)""", RegexOption.IGNORE_CASE)
-            regex1.findAll(normalized).forEach { match ->
-                match.groupValues[1].toFloatOrNull()?.let { if (it > 0f) candidates.add(it) }
+            val hasMarker = earningMarkers.any { normalized.contains(it) }
+            if (hasMarker) {
+                markerSeen = true
+                val nums = Regex("""\b(\d+(?:\.\d+)?)\b""").findAll(normalized)
+                for (n in nums) {
+                    val v = n.groupValues[1].toFloatOrNull()
+                    if (v != null && v > 0f) {
+                        candidates.add(v)
+                    }
+                }
+                continue
             }
 
-            val regex2 = Regex("""(?:sar|sr|ر\.س|ريال|﷼)\s*(\d+(?:\.\d+)?)""", RegexOption.IGNORE_CASE)
-            regex2.findAll(normalized).forEach { match ->
-                match.groupValues[1].toFloatOrNull()?.let { if (it > 0f) candidates.add(it) }
+            if (markerSeen) {
+                if (normalized.contains("bonus") || normalized.contains("vat") || normalized.contains("ضريبة") || normalized.contains("fees")) {
+                    continue
+                }
+                val nums = Regex("""\b(\d+(?:\.\d+)?)\b""").findAll(normalized)
+                for (n in nums) {
+                    val v = n.groupValues[1].toFloatOrNull()
+                    if (v != null && v > 0f && v != 4.18f) {
+                        candidates.add(v)
+                        markerSeen = false
+                        break
+                    }
+                }
+            }
+        }
+
+        // Pass 2: Look for currency markers (e.g. "4.5 SAR", "7.00 ر.س", "SAR 15", "ريال 50")
+        for (raw in texts) {
+            val normalized = normalizeArabicDigits(raw).lowercase()
+            if (walletKeywords.any { normalized.contains(it) }) continue
+
+            for (curr in currencyMarkers) {
+                val escaped = Regex.escape(curr)
+                val r1 = Regex("""(\d+(?:\.\d+)?)\s*""" + escaped)
+                r1.findAll(normalized).forEach { m ->
+                    m.groupValues[1].toFloatOrNull()?.let { if (it > 0f) candidates.add(it) }
+                }
+                val r2 = Regex(escaped + """\s*(\d+(?:\.\d+)?)""")
+                r2.findAll(normalized).forEach { m ->
+                    m.groupValues[1].toFloatOrNull()?.let { if (it > 0f) candidates.add(it) }
+                }
+            }
+        }
+
+        // Pass 3: Bare numbers on offer bottom sheet (e.g. "4.50" or "7.00" next to coin icon)
+        if (candidates.isEmpty()) {
+            for (raw in texts) {
+                val normalized = normalizeArabicDigits(raw).lowercase()
+                if (normalized.contains("km") || normalized.contains("كم") ||
+                    normalized.contains("min") || normalized.contains("دقيقة") || normalized.contains("د") ||
+                    normalized.contains("★") || normalized.contains("rating") ||
+                    walletKeywords.any { normalized.contains(it) }) {
+                    continue
+                }
+                val r = Regex("""\b(\d+(?:\.\d+)?)\b""")
+                r.findAll(normalized).forEach { m ->
+                    val v = m.groupValues[1].toFloatOrNull()
+                    if (v != null && v in 2.0f..350.0f) {
+                        candidates.add(v)
+                    }
+                }
             }
         }
 

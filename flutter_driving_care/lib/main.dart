@@ -898,7 +898,18 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
   // Push filter rules to native Kotlin service
   Future<void> _syncSettingsToNativeService({bool? engineOn}) async {
     try {
-      final blocked = allLocations.where((l) => l.isSelected).map((l) => l.title).toList();
+      final blocked = <String>[];
+      for (final l in allLocations.where((loc) => loc.isSelected)) {
+        blocked.add(l.title);
+        final lower = l.title.toLowerCase();
+        if (lower.contains('airport') || lower.contains('مطار')) blocked.addAll(['airport', 'مطار', 'المطار']);
+        if (lower.contains('bat\'ha') || lower.contains('batha') || lower.contains('بطحاء')) blocked.addAll(['batha', 'bat\'ha', 'البطحاء', 'بطحاء']);
+        if (lower.contains('shamisi') || lower.contains('شميسي')) blocked.addAll(['shamisi', 'الشميسي', 'شميسي']);
+        if (lower.contains('manfuhah') || lower.contains('منفوحة')) blocked.addAll(['manfuhah', 'منفوحة', 'manfuha', 'منفوحه']);
+        if (lower.contains('railway') || lower.contains('قطار')) blocked.addAll(['railway', 'قطار', 'محطة القطار']);
+        if (lower.contains('safarat') || lower.contains('سفارات')) blocked.addAll(['safarat', 'السفارات']);
+        if (lower.contains('kafd') || lower.contains('المالي')) blocked.addAll(['kafd', 'كافد', 'المالي']);
+      }
       await platform.invokeMethod('syncSettings', {
         'runAutoEngine': engineOn ?? runAutoEngine,
         'minPrice': double.tryParse(minPrice) ?? 10.0,
