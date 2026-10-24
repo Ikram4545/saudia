@@ -22,9 +22,34 @@ $found = false;
 foreach ($db['drivers'] as &$driver) {
     if (strcasecmp($driver['key'], $key) === 0) {
         $found = true;
+        $prevStatus = $driver['status'] ?? 'pending';
         $driver['status'] = $newStatus;
+        
+        if ($newStatus === 'active') {
+            // If activating from pending or expiring, set 30 days
+            $driver['daysLeft'] = 30;
+            $driver['activeUntil'] = (time() + 30 * 86400) * 1000;
+            $driver['activatedAt'] = date('Y-m-d H:i:s');
+            
+            // Bind device if requested from phone
+            if (empty($driver['boundDeviceId']) && !empty($driver['requestedDeviceId'])) {
+                $driver['boundDeviceId'] = $driver['requestedDeviceId'];
+            }
+            if (!empty($data['name']) && ($driver['name'] === 'Unassigned Driver' || strpos($driver['name'], 'Unassigned Driver') === 0)) {
+                $driver['name'] = trim($data['name']);
+            }
+            if (!empty($data['phone'])) {
+                $driver['phone'] = trim($data['phone']);
+            }
+            if (!empty($data['city'])) {
+                $driver['city'] = trim($data['city']);
+            }
+        }
+        
         array_unshift($db['logs'], [
-            'event' => 'Driver Status Changed to ' . ucfirst($newStatus),
+            'event' => ($newStatus === 'active' && $prevStatus === 'pending') 
+                ? "Driver Key {$driver['key']} Approved & Activated (30 Days)" 
+                : ('Driver Status Changed to ' . ucfirst($newStatus)),
             'name' => $driver['name'],
             'key' => $driver['key'],
             'device' => 'Admin Portal',

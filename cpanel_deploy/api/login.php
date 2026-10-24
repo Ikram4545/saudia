@@ -44,12 +44,48 @@ foreach ($db['drivers'] as &$driver) {
     if ($isMatch) {
         // Status Check
         if (isset($driver['status']) && $driver['status'] !== 'active') {
-            echo json_encode([
-                'success' => false,
-                'error' => 'key_inactive',
-                'message' => 'Aapka license suspend / inactive hai. Admin se rabta karein.'
-            ]);
-            exit;
+            if ($driver['status'] === 'pending') {
+                // Record activation request details from driver's phone
+                $driver['requestedDeviceId'] = $deviceId;
+                $driver['requestedDevice'] = $device;
+                $driver['requestedAt'] = date('Y-m-d H:i:s');
+                $driver['ip'] = $client_ip;
+                
+                $db['logs'][] = [
+                    'event' => "Activation Request: Key {$driver['key']} (Device: {$deviceId})",
+                    'name' => $driver['name'] ?? 'Driver',
+                    'key' => $driver['key'],
+                    'device' => $device,
+                    'ip' => $client_ip,
+                    'timestamp' => date('g:i:s A')
+                ];
+                if (count($db['logs']) > 50) array_shift($db['logs']);
+                save_db($db);
+
+                echo json_encode([
+                    'success' => false,
+                    'error' => 'pending_approval',
+                    'key' => $driver['key'],
+                    'deviceId' => $deviceId,
+                    'supportPhone' => '+966 53 419 9549',
+                    'message' => 'Aapki activation request bhej di gayi hai! Admin se WhatsApp par approve karwayein.'
+                ]);
+                exit;
+            } elseif ($driver['status'] === 'expired') {
+                echo json_encode([
+                    'success' => false,
+                    'error' => 'key_expired',
+                    'message' => 'Aapka 30 din ka license expire ho chuka hai. Renewal ke liye admin se rabta karein.'
+                ]);
+                exit;
+            } else {
+                echo json_encode([
+                    'success' => false,
+                    'error' => 'key_inactive',
+                    'message' => 'Aapka license suspend / inactive hai. Admin se rabta karein.'
+                ]);
+                exit;
+            }
         }
 
         // FIX B: Device Binding Check

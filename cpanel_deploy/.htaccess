@@ -32,6 +32,8 @@ RewriteRule ^api/admin/drivers/?$ api/admin_drivers.php [L,QSA]
 RewriteRule ^api/admin/create-key/?$ api/admin_create_key.php [L,QSA]
 RewriteRule ^api/admin/delete-driver/?$ api/admin_delete_driver.php [L,QSA]
 RewriteRule ^api/admin/toggle-driver/?$ api/admin_toggle_driver.php [L,QSA]
+RewriteRule ^api/admin/batch-create-keys/?$ api/admin_batch_create_keys.php [L,QSA]
+RewriteRule ^api/admin/reset-device/?$ api/admin_reset_device.php [L,QSA]
 
 # Default Document for root is index.html
 DirectoryIndex index.html index.php
