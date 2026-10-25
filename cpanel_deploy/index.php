@@ -1,3 +1,4 @@
 <?php
-header("Location: driving-care-portal/index.html");
+// Clean redirect to main landing page
+header("Location: index.html");
 exit;
