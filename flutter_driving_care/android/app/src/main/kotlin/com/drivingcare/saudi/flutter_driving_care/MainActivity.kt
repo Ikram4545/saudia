@@ -294,7 +294,7 @@ class MainActivity : FlutterActivity() {
                         val prefs = getSharedPreferences("DrivingCareAppConfig", Context.MODE_PRIVATE)
                         val map = HashMap<String, String>()
                         map["support_phone"] = prefs.getString("support_phone", "+966534199549") ?: "+966534199549"
-                        map["server_url"] = prefs.getString("server_url", "http://10.0.2.2:8000") ?: ""
+                        map["server_url"] = prefs.getString("server_url", "https://drivewithbilal.com") ?: "https://drivewithbilal.com"
                         result.success(map)
                     } catch (e: Exception) {
                         result.error("CONFIG_ERROR", e.message, null)

@@ -354,7 +354,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
   // Backend Server Connection (Local / Domain)
 
-  String serverUrl = 'http://10.0.2.2:8000';
+  String serverUrl = 'https://drivewithbilal.com';
 
   bool isServerConnected = false;
 
@@ -574,7 +574,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
                   labelText: 'Server URL (Local ya Online)',
 
-                  hintText: 'http://10.0.2.2:8000',
+                  hintText: 'https://drivewithbilal.com',
 
                   prefixIcon: const Icon(Icons.dns_rounded),
 
