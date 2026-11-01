@@ -1108,6 +1108,33 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
           autoLaunchOnNotification = result['autoLaunchOnNotification'] == true;
 
+          final savedBlocked = result['blockedLocations'];
+          if (savedBlocked is List && savedBlocked.isNotEmpty) {
+            final set = savedBlocked.map((e) => e.toString().toLowerCase()).toSet();
+            for (final loc in allLocations) {
+              final lower = loc.title.toLowerCase();
+              if (set.contains(lower) ||
+                  (lower.contains('airport') && set.contains('airport')) ||
+                  (lower.contains('batha') && set.contains('batha')) ||
+                  (lower.contains('shamisi') && set.contains('shamisi')) ||
+                  (lower.contains('manfuhah') && set.contains('manfuhah'))) {
+                loc.isSelected = true;
+              }
+            }
+          }
+
+          final savedAvoid = result['avoidWords'];
+          if (savedAvoid is List && savedAvoid.isNotEmpty) {
+            avoidWords = List<String>.from(savedAvoid);
+          }
+
+          if (result['minPrice'] != null) {
+            minPrice = (result['minPrice'] as num).toInt().toString();
+          }
+          if (result['maxPrice'] != null) {
+            maxPrice = (result['maxPrice'] as num).toInt().toString();
+          }
+
           lastAutoLaunchPkg = result['lastAutoLaunchPkg']?.toString() ?? '';
 
           final at = result['lastAutoLaunchAt'];
@@ -2991,6 +3018,13 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
         likedWords = List<String>.from(result['likedWords'] ?? likedWords);
 
+        final newBlocked = result['blockedLocations'];
+        if (newBlocked is List) {
+          final set = newBlocked.map((e) => e.toString().toLowerCase()).toSet();
+          for (final loc in allLocations) {
+            loc.isSelected = set.contains(loc.title.toLowerCase());
+          }
+        }
       });
 
       // Immediately push updated rules to native Android Accessibility Service!
@@ -5629,6 +5663,8 @@ class _AdvancedControlScreenState extends State<AdvancedControlScreen> with Widg
       'maxPrice': _maxPriceController.text.trim(),
 
       'maxPickupTime': _maxPickupController.text.trim(),
+
+      'blockedLocations': allLocations.where((l) => l.isSelected).map((l) => l.title).toList(),
 
       'avoidWords': avoidWords,
 

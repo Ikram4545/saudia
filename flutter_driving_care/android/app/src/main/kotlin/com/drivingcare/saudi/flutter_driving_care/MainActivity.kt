@@ -298,6 +298,26 @@ class MainActivity : FlutterActivity() {
                         map["licenseActive"] = prefs.getBoolean("license_active", false)
                         map["lastAutoLaunchPkg"] = prefs.getString("last_auto_launch_pkg", "") ?: ""
                         map["lastAutoLaunchAt"] = prefs.getLong("last_auto_launch_at", 0L)
+                        val blocked = prefs.getStringSet("blocked_locations", null)
+                        if (blocked != null) {
+                            map["blockedLocations"] = ArrayList(blocked)
+                        }
+                        val avoid = prefs.getStringSet("avoid_words", null)
+                        if (avoid != null) {
+                            map["avoidWords"] = ArrayList(avoid)
+                        }
+                        if (prefs.contains("min_price")) {
+                            map["minPrice"] = prefs.getFloat("min_price", 0f).toDouble()
+                        }
+                        if (prefs.contains("max_price")) {
+                            map["maxPrice"] = prefs.getFloat("max_price", 1000f).toDouble()
+                        }
+                        if (prefs.contains("max_pickup_time")) {
+                            map["maxPickupTime"] = prefs.getFloat("max_pickup_time", 60f).toDouble()
+                        }
+                        if (prefs.contains("auto_reject")) {
+                            map["autoReject"] = prefs.getBoolean("auto_reject", false)
+                        }
                         result.success(map)
                     } catch (e: Exception) {
                         result.success(null)
