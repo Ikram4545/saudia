@@ -9,7 +9,7 @@ $body = file_get_contents('php://input');
 $data = json_decode($body, true) ?? [];
 
 $key = trim($data['key'] ?? '');
-$newStatus = trim($data['status'] ?? ''); // 'active' or 'locked' or 'expired'
+$newStatus = trim($data['status'] ?? ''); // 'active' or 'locked' or 'expired' or 'pending'
 
 if (!$key || !$newStatus) {
     http_response_code(400);
@@ -26,9 +26,17 @@ foreach ($db['drivers'] as &$driver) {
         $driver['status'] = $newStatus;
         
         if ($newStatus === 'active') {
-            // If activating from pending or expiring, set 30 days
-            $driver['daysLeft'] = 30;
-            $driver['activeUntil'] = (time() + 30 * 86400) * 1000;
+            $nowMs = time() * 1000;
+            $currentUntil = !empty($driver['activeUntil']) ? intval($driver['activeUntil']) : 0;
+            
+            // If already active with future expiry, add 30 days to existing expiry; otherwise 30 days from now
+            if ($currentUntil > $nowMs && $prevStatus === 'active') {
+                $driver['activeUntil'] = $currentUntil + (30 * 86400 * 1000);
+            } else {
+                $driver['activeUntil'] = $nowMs + (30 * 86400 * 1000);
+            }
+            
+            $driver['daysLeft'] = max(1, round(($driver['activeUntil'] - $nowMs) / (86400 * 1000)));
             $driver['activatedAt'] = date('Y-m-d H:i:s');
             
             // Bind device if requested from phone
@@ -44,12 +52,17 @@ foreach ($db['drivers'] as &$driver) {
             if (!empty($data['city'])) {
                 $driver['city'] = trim($data['city']);
             }
+        } elseif ($newStatus === 'expired') {
+            $driver['daysLeft'] = 0;
+            $driver['activeUntil'] = time() * 1000;
         }
         
         array_unshift($db['logs'], [
             'event' => ($newStatus === 'active' && $prevStatus === 'pending') 
                 ? "Driver Key {$driver['key']} Approved & Activated (30 Days)" 
-                : ('Driver Status Changed to ' . ucfirst($newStatus)),
+                : ($newStatus === 'active' && $prevStatus !== 'pending'
+                    ? "Driver Key {$driver['key']} Renewed (+30 Days)"
+                    : ('Driver Status Changed to ' . ucfirst($newStatus))),
             'name' => $driver['name'],
             'key' => $driver['key'],
             'device' => 'Admin Portal',
@@ -63,7 +76,12 @@ foreach ($db['drivers'] as &$driver) {
 if ($found) {
     if (count($db['logs']) > 50) array_pop($db['logs']);
     save_db($db);
-    echo json_encode(['success' => true, 'message' => 'Driver status updated successfully']);
+    echo json_encode([
+        'success' => true, 
+        'message' => ($newStatus === 'active' && $prevStatus !== 'active') 
+            ? "Driver $key successfully activated for 30 days!" 
+            : "Driver $key renewed for +30 days!"
+    ]);
 } else {
     http_response_code(404);
     echo json_encode(['success' => false, 'error' => 'Driver key not found']);

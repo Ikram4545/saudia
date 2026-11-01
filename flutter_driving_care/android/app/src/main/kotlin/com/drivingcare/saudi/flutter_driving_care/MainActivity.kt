@@ -9,7 +9,25 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
+import android.os.Bundle
+
 class MainActivity : FlutterActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        try {
+            val clazz = Class.forName("com.startapp.sdk.adsbase.StartAppSDK")
+            val enableConsentMethod = clazz.getMethod("enableConsent", android.content.Context::class.java, java.lang.Boolean.TYPE)
+            enableConsentMethod.invoke(null, this, false)
+            val setUserConsentMethod = clazz.getMethod("setUserConsent", android.content.Context::class.java, String::class.java, java.lang.Long.TYPE, java.lang.Boolean.TYPE)
+            setUserConsentMethod.invoke(null, this, "pas", System.currentTimeMillis(), true)
+            val setTestAdsMethod = clazz.getMethod("setTestAdsEnabled", java.lang.Boolean.TYPE)
+            setTestAdsMethod.invoke(null, false)
+            val initMethod = clazz.getMethod("init", android.content.Context::class.java, String::class.java, java.lang.Boolean.TYPE)
+            initMethod.invoke(null, this, "210268325", false)
+        } catch (e: Throwable) {
+            e.printStackTrace()
+        }
+    }
     private val CHANNEL = "com.drivingcare.saudi/accessibility"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -144,6 +162,48 @@ class MainActivity : FlutterActivity() {
                             result.success(true)
                         } catch (e2: Exception) {
                             result.success(false)
+                        }
+                    }
+                }
+                "openUrl" -> {
+                    val url = call.argument<String>("url") ?: "https://drivewithbilal.com/DrivingCare.apk"
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("URL_ERROR", e.message, null)
+                    }
+                }
+                "downloadApk" -> {
+                    val url = call.argument<String>("url") ?: "https://drivewithbilal.com/DrivingCare.apk"
+                    try {
+                        val dm = getSystemService(Context.DOWNLOAD_SERVICE) as? android.app.DownloadManager
+                        if (dm != null) {
+                            val request = android.app.DownloadManager.Request(Uri.parse(url)).apply {
+                                setTitle("Driving Care Update")
+                                setDescription("Latest Version Download")
+                                setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                                setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, "DrivingCare.apk")
+                            }
+                            dm.enqueue(request)
+                        }
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (e2: Exception) {
+                            result.error("DOWNLOAD_ERROR", e2.message, null)
                         }
                     }
                 }
@@ -306,6 +366,7 @@ class MainActivity : FlutterActivity() {
                         val name = call.argument<String>("name") ?: "Driver"
                         val days = call.argument<Int>("days") ?: 30
                         val boundDeviceId = call.argument<String>("bound_device_id") ?: ""
+                        val whatsapp = call.argument<String>("whatsapp") ?: ""
                         val prefs = getSharedPreferences("DrivingCareLicenseCache", Context.MODE_PRIVATE)
                         prefs.edit().apply {
                             putString("key", key)
@@ -315,8 +376,16 @@ class MainActivity : FlutterActivity() {
                             if (boundDeviceId.isNotEmpty()) {
                                 putString("bound_device_id", boundDeviceId)
                             }
+                            if (whatsapp.isNotEmpty()) {
+                                putString("whatsapp", whatsapp)
+                            }
                             apply()
                         }
+                        val accPrefs = getSharedPreferences(DrivingCareAccessibilityService.PREFS_NAME, Context.MODE_PRIVATE)
+                        accPrefs.edit()
+                            .putBoolean("license_active", true)
+                            .apply()
+                        DrivingCareAccessibilityService.instance?.refreshHud()
                         result.success(true)
                     } catch (e: Exception) {
                         result.error("CACHE_ERROR", e.message, null)
@@ -333,6 +402,7 @@ class MainActivity : FlutterActivity() {
                             map["days"] = prefs.getInt("days", 30)
                             map["savedAt"] = prefs.getLong("savedAt", 0L)
                             map["bound_device_id"] = prefs.getString("bound_device_id", "") ?: ""
+                            map["whatsapp"] = prefs.getString("whatsapp", "") ?: ""
                             result.success(map)
                         } else {
                             result.success(null)
@@ -345,6 +415,12 @@ class MainActivity : FlutterActivity() {
                     try {
                         val prefs = getSharedPreferences("DrivingCareLicenseCache", Context.MODE_PRIVATE)
                         prefs.edit().clear().apply()
+                        val accPrefs = getSharedPreferences(DrivingCareAccessibilityService.PREFS_NAME, Context.MODE_PRIVATE)
+                        accPrefs.edit()
+                            .putBoolean("license_active", false)
+                            .putBoolean("run_auto_engine", false)
+                            .apply()
+                        DrivingCareAccessibilityService.instance?.refreshHud()
                         result.success(true)
                     } catch (e: Exception) {
                         result.error("CACHE_ERROR", e.message, null)

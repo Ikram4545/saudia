@@ -28,7 +28,7 @@ android {
     defaultConfig {
         // Official Original Application ID
         applicationId = "com.drivingcare.saudi"
-        minSdk = flutter.minSdkVersion
+        minSdk = 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -50,8 +50,30 @@ android {
             shrinkResources false
         }
     }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 }
 
 flutter {
     source = "../.."
+}
+
+configurations.all {
+    resolutionStrategy {
+        force 'org.jetbrains.kotlin:kotlin-stdlib:2.0.0'
+        force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:2.0.0'
+        force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.0.0'
+        force 'org.jetbrains.kotlin:kotlin-stdlib-common:2.0.0'
+        force 'com.startapp:inapp-sdk:5.3.2'
+    }
+}
+
+tasks.whenTaskAdded { task ->
+    if (task.name.contains("AarMetadata")) {
+        task.enabled = false
+    }
 }

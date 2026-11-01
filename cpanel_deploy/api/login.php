@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/master_audit_helper.php';
 
 header('Content-Type: application/json');
 
@@ -12,9 +13,12 @@ $normalizedKey = preg_replace('/[^A-Z0-9]/', '', $cleanKey);
 $deviceId = trim($data['deviceId'] ?? '');
 $device = $data['device'] ?? (!empty($deviceId) ? "Android ($deviceId)" : 'Android Mobile');
 $client_ip = get_client_ip();
+$whatsapp = trim($data['whatsapp'] ?? $data['phone'] ?? '');
+$driverName = trim($data['driverName'] ?? $data['name'] ?? '');
 
+// Always return HTTP 200 with clear JSON so mobile carriers (STC, Mobily) do not drop the payload
 if (empty($cleanKey)) {
-    http_response_code(400);
+    http_response_code(200);
     echo json_encode([
         'success' => false,
         'error' => 'missing_key',
@@ -50,6 +54,9 @@ foreach ($db['drivers'] as &$driver) {
                 $driver['requestedDevice'] = $device;
                 $driver['requestedAt'] = date('Y-m-d H:i:s');
                 $driver['ip'] = $client_ip;
+                if (!empty($whatsapp)) $driver['whatsapp'] = $whatsapp;
+                if (!empty($driverName) && $driverName !== 'Driver') $driver['name'] = $driverName;
+                record_master_audit('Activation Request (Pending)', $driver['key'], $driver['name'], $whatsapp, $deviceId, $device, $client_ip);
                 
                 $db['logs'][] = [
                     'event' => "Activation Request: Key {$driver['key']} (Device: {$deviceId})",
@@ -62,6 +69,7 @@ foreach ($db['drivers'] as &$driver) {
                 if (count($db['logs']) > 50) array_shift($db['logs']);
                 save_db($db);
 
+                http_response_code(200);
                 echo json_encode([
                     'success' => false,
                     'error' => 'pending_approval',
@@ -72,6 +80,7 @@ foreach ($db['drivers'] as &$driver) {
                 ]);
                 exit;
             } elseif ($driver['status'] === 'expired') {
+                http_response_code(200);
                 echo json_encode([
                     'success' => false,
                     'error' => 'key_expired',
@@ -79,6 +88,7 @@ foreach ($db['drivers'] as &$driver) {
                 ]);
                 exit;
             } else {
+                http_response_code(200);
                 echo json_encode([
                     'success' => false,
                     'error' => 'key_inactive',
@@ -88,9 +98,39 @@ foreach ($db['drivers'] as &$driver) {
             }
         }
 
-        // FIX B: Device Binding Check
+        // Check 30-Day Automatic Calendar Expiration
+        $nowMs = time() * 1000;
+        $nowSec = time();
+        $isCalendarExpired = false;
+
+        if (!empty($driver['activeUntil']) && is_numeric($driver['activeUntil']) && $driver['activeUntil'] > 0) {
+            if ($nowMs > intval($driver['activeUntil'])) {
+                $isCalendarExpired = true;
+            }
+        } elseif (!empty($driver['activatedAt'])) {
+            $actSec = strtotime($driver['activatedAt']);
+            if ($actSec && ($nowSec - $actSec) > (30 * 86400)) {
+                $isCalendarExpired = true;
+            }
+        }
+
+        if ($isCalendarExpired) {
+            $driver['status'] = 'expired';
+            $driver['daysLeft'] = 0;
+            save_db($db);
+            http_response_code(200);
+            echo json_encode([
+                'success' => false,
+                'error' => 'key_expired',
+                'message' => 'Aapka 30 din ka license expire ho chuka hai. Renewal ke liye admin se rabta karein.'
+            ]);
+            exit;
+        }
+
+        // Device Binding Check
         $existingBoundId = trim($driver['boundDeviceId'] ?? '');
         if (!empty($existingBoundId) && !empty($deviceId) && $existingBoundId !== $deviceId) {
+            http_response_code(200);
             echo json_encode([
                 'success' => false,
                 'error' => 'device_mismatch',
@@ -107,18 +147,29 @@ foreach ($db['drivers'] as &$driver) {
         $driver['online'] = true;
         $driver['lastPing'] = date('c');
         $driver['ip'] = $client_ip;
+                if (!empty($whatsapp)) $driver['whatsapp'] = $whatsapp;
+                if (!empty($driverName) && $driverName !== 'Driver') $driver['name'] = $driverName;
+                record_master_audit('Activation Request (Pending)', $driver['key'], $driver['name'], $whatsapp, $deviceId, $device, $client_ip);
         $driver['device'] = $device;
+        if (!empty($whatsapp)) {
+            $driver['whatsapp'] = $whatsapp;
+            $driver['phone'] = $whatsapp;
+        }
+        if (!empty($driverName) && $driverName !== 'Driver') {
+            $driver['name'] = $driverName;
+        }
         $found = &$driver;
+        record_master_audit('Key Activated / Verified', $found['key'], $found['name'], $found['whatsapp'] ?? $whatsapp, $deviceId, $device, $client_ip);
         break;
     }
 }
 
 if (!$found) {
-    http_response_code(404);
+    http_response_code(200);
     echo json_encode([
         'success' => false,
         'error' => 'invalid_key',
-        'message' => 'License key durust nahi hai ya mojood nahi hai.'
+        'message' => "License key '$rawKey' database mein nahi mili. Baraye meherbani sahi key check karein."
     ]);
     exit;
 }
@@ -136,6 +187,7 @@ if (count($db['logs']) > 50) array_shift($db['logs']);
 
 save_db($db);
 
+http_response_code(200);
 echo json_encode([
     'success' => true,
     'driver' => [

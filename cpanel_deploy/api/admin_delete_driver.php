@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/master_audit_helper.php';
 
 header('Content-Type: application/json');
 
@@ -39,6 +40,12 @@ if ($found) {
     $db['drivers'] = $new_drivers;
     if (count($db['logs']) > 50) array_pop($db['logs']);
     save_db($db);
+    record_master_audit('Deleted by Bilal (Admin Portal)', $key, '', '', '', '', get_client_ip());
+    $audit = get_master_audit_data();
+    if (isset($audit['drivers'][$key])) {
+        $audit['drivers'][$key]['bilalStatus'] = 'deleted_by_bilal';
+        save_master_audit_data($audit);
+    }
     echo json_encode(['success' => true, 'message' => 'Driver deleted successfully']);
 } else {
     http_response_code(404);

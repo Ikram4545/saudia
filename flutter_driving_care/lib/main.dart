@@ -9,13 +9,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'license_crypto.dart';
+import 'driving_care_ads.dart';
 
-
-
-void main() {
-
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await DrivingCareAds.initialize();
   runApp(const DrivingCareApp());
-
 }
 
 
@@ -208,6 +207,12 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
   static const platform = MethodChannel('com.drivingcare.saudi/accessibility');
 
+  // App Versioning & In-App Force Update Control
+  static const int kAppVersionCode = 7;
+  static const String kAppVersionName = '2.6.0';
+  static const String kAppReleaseDate = '2026-10-27';
+  bool _isForceUpdateDialogShowing = false;
+
 
 
   // Strict Licensing State (Fresh Locked by Default - License Key Only)
@@ -227,6 +232,9 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
 
   final TextEditingController _keyController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _whatsappController = TextEditingController();
+  String driverWhatsapp = '';
 
 
 
@@ -321,27 +329,67 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
   // Saudi Blocked Locations (All unselected by default so new installs never block orders out of the box)
 
   final List<SaudiLocationItem> allLocations = [
+    // --- Major Transport & Hubs ---
+    SaudiLocationItem('Airport (مطار الملك خالد)', isSelected: false),
+    SaudiLocationItem('Riyadh Railway Station (محطة القطار)', isSelected: false),
+    SaudiLocationItem('KAFD (كافد / المركز المالي)', isSelected: false),
+    SaudiLocationItem('Al Safarat / Diplomatic Quarter (حي السفارات)', isSelected: false),
 
-    SaudiLocationItem('Riyadh Dammam Railway Station (محطة القطار)', isSelected: false),
-
-    SaudiLocationItem('Al Bat\'ha (البطحاء)', isSelected: false),
-
+    // --- South & Central Riyadh ---
+    SaudiLocationItem("Al Bat'ha (البطحاء)", isSelected: false),
     SaudiLocationItem('Al-Shamisi (الشميسي)', isSelected: false),
-
     SaudiLocationItem('Manfuhah (منفوحة)', isSelected: false),
+    SaudiLocationItem('Al Malaz (الملز)', isSelected: false),
+    SaudiLocationItem('Al Shifa (الشفاء)', isSelected: false),
+    SaudiLocationItem('Al Aziziyah (العزيزية)', isSelected: false),
+    SaudiLocationItem('Al Suwaidi (السويدي)', isSelected: false),
+    SaudiLocationItem('Al Uraija (العريجاء)', isSelected: false),
 
-    SaudiLocationItem('Airport (مطار)', isSelected: false),
+    // --- North Riyadh ---
+    SaudiLocationItem('Al Olaya (العليا)', isSelected: false),
+    SaudiLocationItem('Al Sulaimaniyah (السليمانية)', isSelected: false),
+    SaudiLocationItem('Al Sahafa (الصحافة)', isSelected: false),
+    SaudiLocationItem('Al Aqiq (العقيق)', isSelected: false),
+    SaudiLocationItem('Al Ghadir (الغدير)', isSelected: false),
+    SaudiLocationItem('Al Nakheel (النخيل)', isSelected: false),
+    SaudiLocationItem('Al Narjis (النرجس)', isSelected: false),
+    SaudiLocationItem('Al Yasmin (الياسمين)', isSelected: false),
+    SaudiLocationItem('Al Malqa (الملقا)', isSelected: false),
+    SaudiLocationItem('Hittin (حطين)', isSelected: false),
+    SaudiLocationItem('Al Qirawan (القيروان)', isSelected: false),
+    SaudiLocationItem('Al Arid (العارض)', isSelected: false),
+    SaudiLocationItem('Al Falah (الفلاح)', isSelected: false),
+    SaudiLocationItem('Al Taawun (التعاون)', isSelected: false),
+    SaudiLocationItem('Al Izdihar (الازدهار)', isSelected: false),
+    SaudiLocationItem('Al Wadi (الوادي)', isSelected: false),
+    SaudiLocationItem('Al Muruj (المروج)', isSelected: false),
+    SaudiLocationItem('Al Worood (الورود)', isSelected: false),
+    SaudiLocationItem('King Fahd (الملك فهد)', isSelected: false),
+    SaudiLocationItem('Al Rahmaniyah (الرحمانية)', isSelected: false),
+    SaudiLocationItem('Al Raed (الرائد)', isSelected: false),
 
-    SaudiLocationItem('Al Safarat (السفارات)', isSelected: false),
+    // --- East Riyadh ---
+    SaudiLocationItem('Al Rawdah (الروضة)', isSelected: false),
+    SaudiLocationItem('Al Hamra (الحمراء)', isSelected: false),
+    SaudiLocationItem('Al Quds (القدس)', isSelected: false),
+    SaudiLocationItem('Al Munsiyah (المونسية)', isSelected: false),
+    SaudiLocationItem('Al Yarmouk (اليرموك)', isSelected: false),
+    SaudiLocationItem('Qurtubah (قرطبة)', isSelected: false),
+    SaudiLocationItem('Granada (غرناطة)', isSelected: false),
+    SaudiLocationItem('Al Naseem (النسيم)', isSelected: false),
+    SaudiLocationItem('Al Nadheem (النظيم)', isSelected: false),
+    SaudiLocationItem('Al Khaleej (الخليج)', isSelected: false),
+    SaudiLocationItem('Al Nahdah (النهضة)', isSelected: false),
+    SaudiLocationItem('Al Rimal (الرمال)', isSelected: false),
+    SaudiLocationItem('Al Janadriyah (الجنادرية)', isSelected: false),
 
-    SaudiLocationItem('KAFD / King Abdullah Financial Dist', isSelected: false),
-
-    SaudiLocationItem('KAFD Ring Road', isSelected: false),
-
-    SaudiLocationItem('KAFD Metro Station', isSelected: false),
-
-    SaudiLocationItem('KAFD HQ Tower (Tower 2.14-B)', isSelected: false),
-
+    // --- West Riyadh ---
+    SaudiLocationItem('Diriyah (الدرعية)', isSelected: false),
+    SaudiLocationItem('Tuwaiq (طويق)', isSelected: false),
+    SaudiLocationItem('Dhahrat Laban (ظهرة لبن)', isSelected: false),
+    SaudiLocationItem('Al Waha (الواحة)', isSelected: false),
+    SaudiLocationItem('Al Khalidiyah (الخالدية)', isSelected: false),
+    SaudiLocationItem('Al Faisaliyah (الفيصلية)', isSelected: false),
   ];
 
 
@@ -385,6 +433,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
     WidgetsBinding.instance.addObserver(this);
 
     _initDeviceId();
+    _checkAppUpdate();
 
     _loadAppConfig();
 
@@ -407,6 +456,189 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
   }
 
 
+
+
+  // Check In-App Force Update against backend
+  Future<void> _checkAppUpdate() async {
+    try {
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 4)
+      ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
+      final uri = Uri.parse('$serverUrl/api/check_update.php?code=$kAppVersionCode');
+      final req = await client.getUrl(uri);
+      final resp = await req.close();
+      if (resp.statusCode == 200) {
+        final bodyStr = await resp.transform(utf8.decoder).join();
+        final data = jsonDecode(bodyStr);
+        if (mounted && data is Map) {
+          if (data['update_required'] == true || data['force_update'] == true) {
+            final int minCode = int.tryParse(data['min_version_code']?.toString() ?? '7') ?? 7;
+            if (kAppVersionCode < minCode) {
+              _showForceUpdateDialog(data);
+            }
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  // Non-dismissible Forced Update Dialog
+  void _showForceUpdateDialog(Map? updateInfo) {
+    if (!mounted || _isForceUpdateDialogShowing) return;
+    _isForceUpdateDialogShowing = true;
+    _syncSettingsToNativeService(engineOn: false);
+
+    final title = updateInfo?['title']?.toString() ?? '⚠️ Zaroori Update Dastyab Hai';
+    final message = updateInfo?['message']?.toString() ??
+        'Driving Care ka naya version 2.6.0 aa chuka hai. Purana version security aur system stability ki wajah se band kar diya gaya hai. Jab aap update karenge tabhi yeh app chalegi.';
+    final targetVer = updateInfo?['latest_version_name']?.toString() ?? '2.6.0';
+    final relDate = updateInfo?['release_date']?.toString() ?? kAppReleaseDate;
+    final apkUrl = updateInfo?['apk_url']?.toString() ?? 'https://drivewithbilal.com/DrivingCare.apk';
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withOpacity(0.92),
+      builder: (BuildContext dialogContext) {
+        return PopScope(
+          canPop: false,
+          child: Dialog(
+            backgroundColor: const Color(0xFF0F172A),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: const BorderSide(color: Color(0xFFEF4444), width: 1.5),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(22.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444).withOpacity(0.15),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFFEF4444), width: 1.5),
+                    ),
+                    child: const Icon(
+                      Icons.system_update_rounded,
+                      color: Color(0xFFEF4444),
+                      size: 34,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E293B),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF334155)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Aapka Build: ',
+                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                        ),
+                        Text(
+                          'v$kAppVersionName',
+                          style: const TextStyle(
+                            color: Color(0xFFEF4444),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                        ),
+                        const Text(
+                          ' ➔ Required: ',
+                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                        ),
+                        Text(
+                          'v$targetVer',
+                          style: const TextStyle(
+                            color: Color(0xFF10B981),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Color(0xFFCBD5E1),
+                      fontSize: 13,
+                      height: 1.45,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Release Date: $relDate | Status: Mandatory Lock',
+                    style: const TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF10B981),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 4,
+                      ),
+                      icon: const Icon(Icons.download_rounded, size: 20),
+                      label: const Text(
+                        'UPDATE NOW / ابھی اپڈیٹ کریں',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                      ),
+                      onPressed: () async {
+                        try {
+                          await platform.invokeMethod('downloadApk', {'url': apkUrl});
+                        } catch (_) {
+                          try {
+                            await platform.invokeMethod('openUrl', {'url': apkUrl});
+                          } catch (_) {}
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Update install karne ke baad yeh app khud-ba-khud chal padegi.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Color(0xFF94A3B8),
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   Future<void> _initDeviceId() async {
 
@@ -661,6 +893,8 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
     _heartbeatTimer?.cancel();
 
     _keyController.dispose();
+    _nameController.dispose();
+    _whatsappController.dispose();
 
     super.dispose();
 
@@ -673,6 +907,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
   void didChangeAppLifecycleState(AppLifecycleState state) {
 
     if (state == AppLifecycleState.resumed) {
+      _checkAppUpdate();
 
       _checkAllPermissions().then((_) {
 
@@ -1161,6 +1396,13 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
             licenseKey = key;
 
             driverName = name;
+            driverWhatsapp = result['whatsapp']?.toString() ?? '';
+            if (driverWhatsapp.isNotEmpty) {
+              _whatsappController.text = driverWhatsapp;
+            }
+            if (name.isNotEmpty && name != 'Driver') {
+              _nameController.text = name;
+            }
 
             expiryDisplay = '$remaining Din Baqi';
 
@@ -1178,7 +1420,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
 
 
-  Future<void> _saveLicenseCache({required String key, required String name, required int days, String boundDeviceId = ''}) async {
+  Future<void> _saveLicenseCache({required String key, required String name, required int days, String boundDeviceId = '', String whatsapp = ''}) async {
 
     try {
 
@@ -1191,6 +1433,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
         'days': days,
 
         'bound_device_id': boundDeviceId.isNotEmpty ? boundDeviceId : currentDeviceId,
+        'whatsapp': whatsapp,
 
       });
 
@@ -1218,9 +1461,10 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
       }
 
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 5)
+      ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
 
-      client.userAgent = 'DrivingCareApp/2.5';
+      client.userAgent = 'DrivingCareApp/$kAppVersionName';
 
       final uri = Uri.parse('$serverUrl/api/ping');
 
@@ -1298,7 +1542,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
     _heartbeatTimer?.cancel();
 
-    _heartbeatTimer = Timer.periodic(const Duration(seconds: 15), (t) {
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 8), (t) {
 
       if (isActivated) {
 
@@ -1880,7 +2124,8 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
     try {
 
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 3);
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 3)
+      ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
 
       final uri = Uri.parse('$serverUrl/api/ping');
 
@@ -1926,9 +2171,10 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
     try {
 
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 5)
+      ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
 
-      client.userAgent = 'DrivingCareApp/2.5';
+      client.userAgent = 'DrivingCareApp/$kAppVersionName';
 
       final uri = Uri.parse('$serverUrl/api/ping');
 
@@ -1955,6 +2201,9 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
         'key': licenseKey,
 
         'driverName': driverName,
+        'whatsapp': driverWhatsapp,
+        'versionCode': kAppVersionCode,
+        'versionName': kAppVersionName,
 
         'deviceId': currentDeviceId,
 
@@ -1971,69 +2220,55 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
 
       if (mounted && data is Map) {
-
-        if (data['success'] == false && data['error'] == 'device_mismatch') {
-
-          setState(() {
-
-            isActivated = false;
-
-            lockReason = data['message'] ?? 'Ye key kisi aur phone par band hai.';
-
-          });
-
-          _syncSettingsToNativeService(engineOn: false);
-
-          try {
-
-            platform.invokeMethod('clearLicenseCache');
-
-          } catch (_) {}
-
+        // FORCE IN-APP UPDATE
+        if (data['force_update'] == true || data['error'] == 'update_required') {
+          _showForceUpdateDialog(data['update_info'] is Map ? data['update_info'] as Map : data);
           return;
-
         }
 
-
+        // INSTANT REMOTE KILL-SWITCH: Key deleted, device reset, expired, or locked by Admin
+        if (data['lock'] == true || data['success'] == false) {
+          final msg = data['message']?.toString() ?? 'Aapka license admin ki taraf se band kar diya gaya hai.';
+          setState(() {
+            isActivated = false;
+            lockReason = msg;
+            isServerConnected = false;
+            licenseKey = '';
+          });
+          _syncSettingsToNativeService(engineOn: false);
+          try {
+            platform.invokeMethod('clearLicenseCache');
+          } catch (_) {}
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: const Color(0xFFEF4444),
+              content: Text(msg),
+              duration: const Duration(seconds: 8),
+            ),
+          );
+          return;
+        }
 
         if (response.statusCode == 200 && data['success'] == true) {
-
           final status = (data['status'] ?? 'active').toString().toLowerCase();
-
-          if (status == 'blocked' || status == 'suspended' || status == 'inactive') {
-
-            // ONLY lock when admin EXPLICITLY revokes access on the server
-
+          if (status == 'blocked' || status == 'suspended' || status == 'inactive' || status == 'expired') {
+            final msg = data['message']?.toString() ?? 'Admin ne aapka access suspend / lock kar diya hai.';
             setState(() {
-
               isActivated = false;
-
-              lockReason = 'Admin ne aapka access suspend / lock kar diya hai.';
-
+              lockReason = msg;
+              licenseKey = '';
             });
-
             _syncSettingsToNativeService(engineOn: false);
-
             try {
-
               platform.invokeMethod('clearLicenseCache');
-
             } catch (_) {}
-
+            return;
           } else {
-
             setState(() {
-
               isServerConnected = true;
-
             });
-
           }
-
         }
-
-        // NOTE: On any other non-blocked response, keep previous activation active!
-
       }
 
     } catch (_) {
@@ -2063,24 +2298,30 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
   Future<void> _activateWithKey() async {
 
     final key = _keyController.text.trim();
+    final name = _nameController.text.trim();
+    final whatsapp = _whatsappController.text.trim();
 
     if (key.isEmpty) {
-
       ScaffoldMessenger.of(context).showSnackBar(
-
         const SnackBar(
-
           backgroundColor: Color(0xFFEF4444),
-
           content: Text('Barah-e-karam License Key darj karein.'),
-
         ),
-
       );
-
       return;
-
     }
+
+    if (whatsapp.isEmpty || whatsapp.length < 8) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFFEF4444),
+          content: Text('Barah-e-karam apna durust WhatsApp number darj karein (+966...).'),
+        ),
+      );
+      return;
+    }
+
+
 
 
 
@@ -2232,9 +2473,10 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
     try {
 
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 8)
+      ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
 
-      client.userAgent = 'DrivingCareApp/2.5';
+      client.userAgent = 'DrivingCareApp/$kAppVersionName';
 
       final uri = Uri.parse('$serverUrl/api/login.php');
 
@@ -2245,6 +2487,9 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
       request.write(jsonEncode({
 
         'key': key,
+        'driverName': name.isNotEmpty ? name : 'Driver',
+        'whatsapp': whatsapp,
+        'phone': whatsapp,
 
         'deviceId': currentDeviceId,
 
@@ -2294,15 +2539,17 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
 
 
+        final finalDriverName = name.isNotEmpty ? name : (driverData['name']?.toString() ?? 'Authorized Driver');
         await _saveLicenseCache(
 
           key: key,
 
-          name: name,
+          name: finalDriverName,
 
           days: days,
 
           boundDeviceId: currentDeviceId,
+          whatsapp: whatsapp,
 
         );
 
@@ -2316,7 +2563,8 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
           licenseKey = key;
 
-          driverName = name;
+          driverName = finalDriverName;
+          driverWhatsapp = whatsapp;
 
           expiryDisplay = '$days Din Baqi';
 
@@ -2814,7 +3062,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
               child: const Text(
 
-                'v2.5.0',
+                'v$kAppVersionName',
 
                 style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
 
@@ -2868,7 +3116,17 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
       ),
 
-      body: isActivated ? _buildActiveDashboard(cardBg, borderColor, textPrimary) : _buildLockedScreen(cardBg, borderColor, textPrimary),
+      body: Column(
+        children: [
+          const StartIoTopBanner(),
+          Expanded(
+            child: isActivated
+                ? _buildActiveDashboard(cardBg, borderColor, textPrimary)
+                : _buildLockedScreen(cardBg, borderColor, textPrimary),
+          ),
+        ],
+      ),
+      bottomNavigationBar: const UnityBottomBanner(),
 
       floatingActionButton: isActivated
 
@@ -3067,27 +3325,40 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
               children: [
 
                 const Text(
-
-                  'ENTER LICENSE KEY',
-
+                  'DRIVER REGISTRATION & ACTIVATION',
                   style: TextStyle(
-
                     fontSize: 13,
-
                     fontWeight: FontWeight.bold,
-
                     letterSpacing: 0.5,
-
                     color: Colors.grey,
-
                   ),
-
                 ),
-
-                const SizedBox(height: 10),
-
+                const SizedBox(height: 12),
                 TextField(
-
+                  controller: _nameController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: InputDecoration(
+                    labelText: 'Driver Full Name',
+                    hintText: 'e.g. Tariq Khan / Muhammad',
+                    prefixIcon: const Icon(Icons.person_rounded, color: Color(0xFF2563EB)),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _whatsappController,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(
+                    labelText: 'WhatsApp Mobile Number',
+                    hintText: 'e.g. +966 5X XXX XXXX',
+                    prefixIcon: const Icon(Icons.phone_android_rounded, color: Color(0xFF10B981)),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    helperText: 'For official license confirmation & 24/7 technical support',
+                    helperStyle: const TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
                   controller: _keyController,
 
                   textCapitalization: TextCapitalization.characters,
@@ -5308,7 +5579,8 @@ class _AdvancedControlScreenState extends State<AdvancedControlScreen> with Widg
 
     try {
 
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 4)
+      ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
 
       final uri = Uri.parse('${widget.serverUrl}/api/settings');
 
@@ -5418,11 +5690,13 @@ class _AdvancedControlScreenState extends State<AdvancedControlScreen> with Widg
 
       ),
 
-      body: SingleChildScrollView(
-
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-
-        child: Column(
+      body: Column(
+        children: [
+          const StartIoTopBanner(),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Column(
 
           crossAxisAlignment: CrossAxisAlignment.stretch,
 
@@ -6447,6 +6721,10 @@ class _AdvancedControlScreenState extends State<AdvancedControlScreen> with Widg
         ),
 
       ),
+      ),
+    ],
+  ),
+  bottomNavigationBar: const UnityBottomBanner(),
 
     );
 
