@@ -14,19 +14,6 @@ import android.os.Bundle
 class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        try {
-            val clazz = Class.forName("com.startapp.sdk.adsbase.StartAppSDK")
-            val enableConsentMethod = clazz.getMethod("enableConsent", android.content.Context::class.java, java.lang.Boolean.TYPE)
-            enableConsentMethod.invoke(null, this, false)
-            val setUserConsentMethod = clazz.getMethod("setUserConsent", android.content.Context::class.java, String::class.java, java.lang.Long.TYPE, java.lang.Boolean.TYPE)
-            setUserConsentMethod.invoke(null, this, "pas", System.currentTimeMillis(), true)
-            val setTestAdsMethod = clazz.getMethod("setTestAdsEnabled", java.lang.Boolean.TYPE)
-            setTestAdsMethod.invoke(null, false)
-            val initMethod = clazz.getMethod("init", android.content.Context::class.java, String::class.java, java.lang.Boolean.TYPE)
-            initMethod.invoke(null, this, "210268325", false)
-        } catch (e: Throwable) {
-            e.printStackTrace()
-        }
     }
     private val CHANNEL = "com.drivingcare.saudi/accessibility"
 

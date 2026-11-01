@@ -3,52 +3,77 @@ import 'package:flutter/material.dart';
 import 'package:unity_ads_plugin/unity_ads_plugin.dart';
 import 'package:startapp_sdk/startapp.dart';
 
-/// Central Real Ad Configuration for Driving Care Bot
+/// Central Ad Configuration & Initialization State Machine for Driving Care
 class DrivingCareAds {
+  // --- CREDENTIALS (VERIFIED FROM DASHBOARDS) ---
   static const String unityGameId = '800419412';
   static const String unityBannerPlacement = 'BP_Banner_Android';
   static const String startIoAppId = '210268325';
 
-  static bool _unityInitialized = false;
-  static bool get isUnityReady => _unityInitialized;
+  /// Toggle test mode for isolated debugging.
+  /// Set to true to verify SDK network rendering; false for production live bidding.
+  static const bool useTestAds = false;
 
-  /// Call once at app launch - awaited before runApp
+  // --- UNITY ADS INITIALIZATION STATE ---
+  static final ValueNotifier<UnityInitState> unityInitState =
+      ValueNotifier<UnityInitState>(UnityInitState.notInitialized);
+
+  static String? unityInitErrorMessage;
+  static bool get isUnityReady => unityInitState.value == UnityInitState.initialized;
+
+  /// Dedicated SDK Initialization Routine - Called and awaited in main()
   static Future<void> initialize() async {
-    // 1. Force Start.io to live/production mode
+    debugPrint('====================================================');
+    debugPrint('[DrivingCareAds] Starting Ad Network Initialization');
+    debugPrint('[DrivingCareAds] Mode: ${useTestAds ? "TEST MODE" : "LIVE PRODUCTION"}');
+    debugPrint('[DrivingCareAds] Unity Game ID: $unityGameId');
+    debugPrint('[DrivingCareAds] Start.io App ID: $startIoAppId');
+    debugPrint('====================================================');
+
+    // 1. Configure Start.io via official Flutter plugin
     try {
       final startApp = StartAppSdk();
-      await startApp.setTestAdsEnabled(false);
-      debugPrint('[DrivingCareAds] Start.io Live Ads mode initialized');
+      await startApp.setTestAdsEnabled(useTestAds);
+      debugPrint('[DrivingCareAds] Start.io SDK testMode set to: $useTestAds');
     } catch (e) {
-      debugPrint('[DrivingCareAds] Start.io init notice: $e');
+      debugPrint('[DrivingCareAds] Start.io configuration error: $e');
     }
 
-    // 2. Initialize Unity Ads in Live mode with completion handshake
+    // 2. Initialize Unity Ads with full callback state-tracking (No arbitrary timeout)
+    unityInitState.value = UnityInitState.initializing;
     try {
-      final completer = Completer<void>();
       await UnityAds.init(
         gameId: unityGameId,
-        testMode: false,
+        testMode: useTestAds,
         onComplete: () {
-          _unityInitialized = true;
-          debugPrint('[DrivingCareAds] Unity Ads SDK active (Live Mode)');
-          if (!completer.isCompleted) completer.complete();
+          unityInitState.value = UnityInitState.initialized;
+          unityInitErrorMessage = null;
+          debugPrint('[DrivingCareAds] >>> Unity Ads SDK Initialized Successfully <<<');
         },
         onFailed: (error, message) {
-          _unityInitialized = false;
-          debugPrint('[DrivingCareAds] Unity Ads SDK init: $message');
-          if (!completer.isCompleted) completer.complete();
+          unityInitState.value = UnityInitState.failed;
+          unityInitErrorMessage = '$error: $message';
+          debugPrint('[DrivingCareAds] >>> Unity Ads Initialization FAILED: $error - $message <<<');
         },
       );
-      // Allow up to 2 seconds for native handshake, then proceed
-      await completer.future.timeout(const Duration(seconds: 2), onTimeout: () {});
     } catch (e) {
-      debugPrint('[DrivingCareAds] Unity Ads init exception: $e');
+      unityInitState.value = UnityInitState.failed;
+      unityInitErrorMessage = e.toString();
+      debugPrint('[DrivingCareAds] Unity Ads initialization exception: $e');
     }
   }
 }
 
-/// REAL AD ENGINE: Top Banner (Start.io Live Network + Auto-Refresh)
+enum UnityInitState {
+  notInitialized,
+  initializing,
+  initialized,
+  failed,
+}
+
+/// ============================================================================
+/// PART 3: START.IO TOP BANNER WIDGET
+/// ============================================================================
 class StartIoTopBanner extends StatefulWidget {
   const StartIoTopBanner({super.key});
 
@@ -60,64 +85,62 @@ class _StartIoTopBannerState extends State<StartIoTopBanner> {
   final StartAppSdk _startAppSdk = StartAppSdk();
   StartAppBannerAd? _bannerAd;
   bool _isLoading = false;
-  Timer? _retryTimer;
-  Timer? _autoRefreshTimer;
+  String? _lastError;
+  int _requestCount = 0;
 
   @override
   void initState() {
     super.initState();
-    _loadStartAppAd();
-
-    // Auto-refresh banner every 30 seconds
-    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted) {
-        _loadStartAppAd(isRefresh: true);
-      }
-    });
+    _requestBannerAd();
+    // NOTE: Automatic periodic refresh is TEMPORARILY DISABLED as per audit
+    // instructions to ensure clean, isolated testing of the ad request lifecycle.
   }
 
   @override
   void dispose() {
-    _retryTimer?.cancel();
-    _autoRefreshTimer?.cancel();
     _bannerAd?.dispose();
     super.dispose();
   }
 
-  void _loadStartAppAd({bool isRefresh = false}) {
+  void _requestBannerAd() {
     if (_isLoading) return;
     _isLoading = true;
+    _requestCount++;
+
+    final requestTimestamp = DateTime.now().toIso8601String();
+    debugPrint('[Start.io] [$requestTimestamp] Request #$_requestCount sent for Banner (App ID: ${DrivingCareAds.startIoAppId})');
 
     _startAppSdk
         .loadBannerAd(
       StartAppBannerType.BANNER,
       onAdImpression: () {
-        debugPrint('[Start.io] Top Banner impression recorded');
+        debugPrint('[Start.io] Banner Impression Logged at ${DateTime.now().toIso8601String()}');
       },
       onAdClicked: () {
-        debugPrint('[Start.io] Top Banner clicked');
+        debugPrint('[Start.io] Banner Clicked at ${DateTime.now().toIso8601String()}');
       },
     )
         .then((banner) {
+      debugPrint('[Start.io] Banner Loaded Successfully at ${DateTime.now().toIso8601String()}');
       if (mounted) {
         setState(() {
-          if (isRefresh) {
-            _bannerAd?.dispose();
-          }
+          _bannerAd?.dispose();
           _bannerAd = banner;
           _isLoading = false;
+          _lastError = null;
         });
       }
     }).catchError((err) {
-      debugPrint('[Start.io] Real Ad loading notice: $err. Retrying silently...');
+      final errorMsg = err.toString();
+      debugPrint('[Start.io] Banner Request Failed: $errorMsg');
+      if (errorMsg.contains('204') || errorMsg.contains('failed_to_receive_ad')) {
+        debugPrint('[Start.io] Response: NO_FILL (204) - No ad inventory available from bidders for this device/geo');
+      }
       if (mounted) {
         setState(() {
           _isLoading = false;
+          _lastError = errorMsg;
         });
-        if (!isRefresh && _bannerAd == null) {
-          _retryTimer?.cancel();
-          _retryTimer = Timer(const Duration(seconds: 4), () => _loadStartAppAd());
-        }
       }
     });
   }
@@ -135,21 +158,24 @@ class _StartIoTopBannerState extends State<StartIoTopBanner> {
               height: 50,
               width: double.infinity,
               color: const Color(0xFF0F172A),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Container(
                     width: 7,
                     height: 7,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF10B981),
+                    decoration: BoxDecoration(
+                      color: _lastError != null ? const Color(0xFFF59E0B) : const Color(0xFF10B981),
                       shape: BoxShape.circle,
                     ),
                   ),
                   const SizedBox(width: 8),
-                  const Text(
-                    'Driving Care Partner Network',
-                    style: TextStyle(
+                  Text(
+                    _isLoading
+                        ? 'Connecting to Start.io Ad Network...'
+                        : (_lastError != null ? 'Start.io: No Fill (Waiting for Bids)' : 'Driving Care Partner Network'),
+                    style: const TextStyle(
                       color: Color(0xFF64748B),
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -163,7 +189,9 @@ class _StartIoTopBannerState extends State<StartIoTopBanner> {
   }
 }
 
-/// REAL AD ENGINE: Bottom Banner (Unity Ads Live + Start.io Live Secondary + Auto-Refresh)
+/// ============================================================================
+/// PART 2: UNITY ADS BOTTOM BANNER WIDGET
+/// ============================================================================
 class UnityBottomBanner extends StatefulWidget {
   const UnityBottomBanner({super.key});
 
@@ -172,69 +200,47 @@ class UnityBottomBanner extends StatefulWidget {
 }
 
 class _UnityBottomBannerState extends State<UnityBottomBanner> {
-  final StartAppSdk _startAppSdk = StartAppSdk();
-  StartAppBannerAd? _secondaryStartAppBanner;
-  bool _unityAdLoaded = false;
-  int _unityKeyIndex = 0;
-  Timer? _unityRefreshTimer;
+  bool _bannerLoaded = false;
+  String? _bannerError;
 
   @override
   void initState() {
     super.initState();
-    _loadSecondaryStartApp();
-
-    // Auto-refresh Unity Banner every 32 seconds
-    _unityRefreshTimer = Timer.periodic(const Duration(seconds: 32), (_) {
-      if (mounted) {
-        setState(() {
-          _unityKeyIndex++;
-        });
-      }
-    });
+    // NOTE: Automatic periodic refresh is TEMPORARILY DISABLED as per audit
+    // instructions to ensure clean, isolated testing of the ad request lifecycle.
   }
 
-  @override
-  void dispose() {
-    _unityRefreshTimer?.cancel();
-    _secondaryStartAppBanner?.dispose();
-    super.dispose();
-  }
-
-  void _loadSecondaryStartApp() {
-    _startAppSdk
-        .loadBannerAd(
-      StartAppBannerType.BANNER,
-      onAdImpression: () {
-        debugPrint('[BottomBanner] Secondary Start.io impression recorded');
-      },
-      onAdClicked: () {
-        debugPrint('[BottomBanner] Secondary Start.io clicked');
-      },
-    )
-        .then((banner) {
-      if (mounted) {
-        setState(() {
-          _secondaryStartAppBanner?.dispose();
-          _secondaryStartAppBanner = banner;
-        });
-      }
-    }).catchError((_) {
-      // Retry in 6s silently if needed
-      Future.delayed(const Duration(seconds: 6), () {
-        if (mounted && !_unityAdLoaded && _secondaryStartAppBanner == null) {
-          _loadSecondaryStartApp();
-        }
-      });
-    });
-  }
-
-  void _onUnityFailed(String placementId, UnityAdsBannerError error, String message) {
-    debugPrint('[Unity Ads] Bottom Banner response: $message');
-    if (mounted && _unityAdLoaded) {
+  void _onBannerLoaded(String placementId) {
+    debugPrint('[Unity Ads] >>> Banner LOADED SUCCESS: placementId=$placementId at ${DateTime.now().toIso8601String()} <<<');
+    if (mounted) {
       setState(() {
-        _unityAdLoaded = false;
+        _bannerLoaded = true;
+        _bannerError = null;
       });
     }
+  }
+
+  void _onBannerFailed(String placementId, UnityAdsBannerError error, String message) {
+    debugPrint('[Unity Ads] >>> Banner LOAD FAILED: placementId=$placementId, error=$error, message="$message" <<<');
+    if (error == UnityAdsBannerError.noFill || message.toLowerCase().contains('no fill')) {
+      debugPrint('[Unity Ads] Diagnosis: NO_FILL - The Unity ad exchange has no filled bids for this direct APK at this moment.');
+    } else if (message.toLowerCase().contains('not initialized') || message.toLowerCase().contains('initialize')) {
+      debugPrint('[Unity Ads] Diagnosis: NOT_INITIALIZED - Unity Ads SDK was not ready before banner request.');
+    }
+    if (mounted) {
+      setState(() {
+        _bannerLoaded = false;
+        _bannerError = '$error: $message';
+      });
+    }
+  }
+
+  void _onBannerClicked(String placementId) {
+    debugPrint('[Unity Ads] Banner Clicked: placementId=$placementId');
+  }
+
+  void _onBannerShown(String placementId) {
+    debugPrint('[Unity Ads] Banner Shown (Impression): placementId=$placementId');
   }
 
   @override
@@ -246,16 +252,12 @@ class _UnityBottomBannerState extends State<UnityBottomBanner> {
         height: 50,
         alignment: Alignment.center,
         color: const Color(0xFF0B132B),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // If Unity is still negotiating with DSP, show the real secondary Start.io banner
-            if (!_unityAdLoaded && _secondaryStartAppBanner != null)
-              StartAppBanner(_secondaryStartAppBanner!),
-
-            // If neither has responded yet, clean branded baseline
-            if (!_unityAdLoaded && _secondaryStartAppBanner == null)
-              Container(
+        child: ValueListenableBuilder<UnityInitState>(
+          valueListenable: DrivingCareAds.unityInitState,
+          builder: (context, initState, child) {
+            // Rule: Jab tak initialization successful na ho, banner request mat bhejo
+            if (initState != UnityInitState.initialized) {
+              return Container(
                 height: 50,
                 width: double.infinity,
                 color: const Color(0xFF0F172A),
@@ -265,15 +267,19 @@ class _UnityBottomBannerState extends State<UnityBottomBanner> {
                     Container(
                       width: 7,
                       height: 7,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF3B82F6),
+                      decoration: BoxDecoration(
+                        color: initState == UnityInitState.failed ? const Color(0xFFEF4444) : const Color(0xFFF59E0B),
                         shape: BoxShape.circle,
                       ),
                     ),
                     const SizedBox(width: 8),
-                    const Text(
-                      'Driving Care Monetization Engine',
-                      style: TextStyle(
+                    Text(
+                      initState == UnityInitState.initializing
+                          ? 'Initializing Unity Ads SDK...'
+                          : (initState == UnityInitState.failed
+                              ? 'Unity SDK Init Failed'
+                              : 'Waiting for Unity SDK...'),
+                      style: const TextStyle(
                         color: Color(0xFF64748B),
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
@@ -282,27 +288,58 @@ class _UnityBottomBannerState extends State<UnityBottomBanner> {
                     ),
                   ],
                 ),
-              ),
+              );
+            }
 
-            // Real Unity Live Banner Ad
-            UnityBannerAd(
-              key: ValueKey('unity_live_banner_$_unityKeyIndex'),
-              placementId: DrivingCareAds.unityBannerPlacement,
-              size: BannerSize.standard,
-              onLoad: (placementId) {
-                debugPrint('[Unity Ads] Real Bottom Banner loaded successfully: $placementId');
-                if (mounted) {
-                  setState(() {
-                    _unityAdLoaded = true;
-                  });
-                }
-              },
-              onClick: (placementId) {
-                debugPrint('[Unity Ads] Real Bottom Banner clicked: $placementId');
-              },
-              onFailed: _onUnityFailed,
-            ),
-          ],
+            // SDK is Initialized: Render Unity Banner with dedicated callbacks
+            return Stack(
+              alignment: Alignment.center,
+              children: [
+                // Baseline status when banner is requesting or returned no fill
+                if (!_bannerLoaded)
+                  Container(
+                    height: 50,
+                    width: double.infinity,
+                    color: const Color(0xFF0F172A),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            color: _bannerError != null ? const Color(0xFFF59E0B) : const Color(0xFF3B82F6),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _bannerError != null
+                              ? 'Unity Ads: No Fill (Waiting for Inventory)'
+                              : 'Requesting Unity Banner Ad...',
+                          style: const TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                // Native Unity Banner Ad View
+                UnityBannerAd(
+                  placementId: DrivingCareAds.unityBannerPlacement,
+                  size: BannerSize.standard,
+                  onLoad: _onBannerLoaded,
+                  onClick: _onBannerClicked,
+                  onShown: _onBannerShown,
+                  onFailed: _onBannerFailed,
+                ),
+              ],
+            );
+          },
         ),
       ),
     );

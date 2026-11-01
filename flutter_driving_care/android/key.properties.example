@@ -1,0 +1,7 @@
+# Example Android Keystore configuration
+# Copy this file to key.properties and fill with your actual keystore credentials
+# key.properties is git-ignored and should NEVER be committed to Git!
+keyAlias=drivingcare
+keyPassword=your_secure_key_password
+storeFile=driving_care.keystore
+storePassword=your_secure_store_password

@@ -461,8 +461,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
   // Check In-App Force Update against backend
   Future<void> _checkAppUpdate() async {
     try {
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 4)
-      ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
       final uri = Uri.parse('$serverUrl/api/check_update.php?code=$kAppVersionCode');
       final req = await client.getUrl(uri);
       final resp = await req.close();
@@ -1461,8 +1460,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
       }
 
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 5)
-      ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
 
       client.userAgent = 'DrivingCareApp/$kAppVersionName';
 
@@ -2124,8 +2122,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
     try {
 
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 3)
-      ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 3);
 
       final uri = Uri.parse('$serverUrl/api/ping');
 
@@ -2171,8 +2168,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
     try {
 
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 5)
-      ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
 
       client.userAgent = 'DrivingCareApp/$kAppVersionName';
 
@@ -2473,8 +2469,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
     try {
 
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 8)
-      ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
 
       client.userAgent = 'DrivingCareApp/$kAppVersionName';
 
@@ -5579,8 +5574,7 @@ class _AdvancedControlScreenState extends State<AdvancedControlScreen> with Widg
 
     try {
 
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 4)
-      ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
 
       final uri = Uri.parse('${widget.serverUrl}/api/settings');
 

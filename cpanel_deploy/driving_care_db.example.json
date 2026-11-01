@@ -1,0 +1,10 @@
+{
+  "admin": {
+    "username": "admin",
+    "allowed_users": [
+      "admin"
+    ]
+  },
+  "drivers": [],
+  "logs": []
+}

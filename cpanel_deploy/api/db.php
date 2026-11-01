@@ -15,12 +15,20 @@ function get_admin_credentials() {
     if (file_exists($configFile)) {
         return require $configFile;
     }
-    return [
-        'username' => getenv('DC_ADMIN_USER') ?: 'admin',
-        'password' => getenv('DC_ADMIN_PASS') ?: 'DrivingCare@2026#Admin',
-        'allowed_users' => ['ikramadmin', 'ikram', 'bilal', 'admin'],
-        'secret_salt' => 'dc_secure_salt_saudia_2026',
-    ];
+     = getenv('DC_ADMIN_USER');
+     = getenv('DC_ADMIN_PASS');
+     = getenv('DC_ADMIN_SALT');
+    if ( && ) {
+        return [
+            'username' => ,
+            'password' => ,
+            'allowed_users' => [],
+            'secret_salt' =>  ?: hash('sha256',  . ),
+        ];
+    }
+    http_response_code(500);
+    echo json_encode(['success' => false, 'error' => 'Server Security Error: admin_config.php or environment variables required.']);
+    exit;
 }
 
 function get_db() {

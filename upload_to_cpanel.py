@@ -1,11 +1,18 @@
 import ftplib
 import os
 
-FTP_HOST = "57.129.148.42"
-FTP_USER = "drivewithbilal"
-FTP_PASS = "VQS~.ufLY?J=E=6a"
+FTP_HOST = os.environ.get("CPANEL_FTP_HOST", "")
+FTP_USER = os.environ.get("CPANEL_FTP_USER", "")
+FTP_PASS = os.environ.get("CPANEL_FTP_PASS", "")
 
 def upload():
+    if not (FTP_HOST and FTP_USER and FTP_PASS):
+        raise ValueError(
+            "Security: FTP credentials must be set via environment variables:\n"
+            "  CPANEL_FTP_HOST\n"
+            "  CPANEL_FTP_USER\n"
+            "  CPANEL_FTP_PASS"
+        )
     print(f"Connecting to FTP {FTP_HOST}...")
     ftp = ftplib.FTP(FTP_HOST, timeout=60)
     ftp.login(FTP_USER, FTP_PASS)
