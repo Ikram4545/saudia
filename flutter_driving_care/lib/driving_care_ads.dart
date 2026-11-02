@@ -130,6 +130,7 @@ class AdsterraBannerWidget extends StatefulWidget {
   final int height;
   final String adKey;
   final String scriptUrl;
+  final int refreshSeconds;
 
   const AdsterraBannerWidget({
     super.key,
@@ -137,6 +138,7 @@ class AdsterraBannerWidget extends StatefulWidget {
     this.height = 50,
     this.adKey = DrivingCareAds.adsterraBannerKey,
     this.scriptUrl = DrivingCareAds.adsterraBannerScript,
+    this.refreshSeconds = 70, // 60 to 80 seconds standard safe refresh interval
   });
 
   @override
@@ -145,8 +147,10 @@ class AdsterraBannerWidget extends StatefulWidget {
 
 class _AdsterraBannerWidgetState extends State<AdsterraBannerWidget> {
   late final WebViewController _controller;
+  Timer? _refreshTimer;
 
   String _buildAdsterraHtml() {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
     return '''<!DOCTYPE html>
 <html>
 <head>
@@ -167,6 +171,7 @@ class _AdsterraBannerWidgetState extends State<AdsterraBannerWidget> {
   </style>
 </head>
 <body>
+  <!-- cb: $timestamp -->
   <div style="width:${widget.width}px; height:${widget.height}px; display:flex; justify-content:center; align-items:center;">
     <script type="text/javascript">
       atOptions = {
@@ -198,6 +203,16 @@ class _AdsterraBannerWidgetState extends State<AdsterraBannerWidget> {
       );
 
     _loadAd();
+    _startAutoRefresh();
+  }
+
+  void _startAutoRefresh() {
+    if (widget.refreshSeconds <= 0) return;
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(Duration(seconds: widget.refreshSeconds), (timer) {
+      if (!mounted) return;
+      _loadAd();
+    });
   }
 
   void _loadAd() {
@@ -206,10 +221,16 @@ class _AdsterraBannerWidgetState extends State<AdsterraBannerWidget> {
         _buildAdsterraHtml(),
         baseUrl: DrivingCareAds.adsterraApprovedDomain,
       );
-      debugPrint('[Adsterra] 320x50 Banner loaded successfully');
+      debugPrint('[Adsterra] Banner reloaded (Interval: ${widget.refreshSeconds}s)');
     } catch (e) {
       debugPrint('[Adsterra] Banner load error: $e');
     }
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   @override
