@@ -255,8 +255,11 @@ class UnityBottomBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     return const SafeArea(
       top: false,
-      child: AdsterraSocialBarWidget(
-        height: 60,
+      child: AdsterraBannerWidget(
+        width: 320,
+        height: 50,
+        adKey: DrivingCareAds.adsterraBannerKey,
+        scriptUrl: DrivingCareAds.adsterraBannerScript,
       ),
     );
   }
