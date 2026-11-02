@@ -208,9 +208,9 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
   static const platform = MethodChannel('com.drivingcare.saudi/accessibility');
 
   // App Versioning & In-App Force Update Control
-  static const int kAppVersionCode = 7;
+  static const int kAppVersionCode = 8;
   static const String kAppVersionName = '2.6.0';
-  static const String kAppReleaseDate = '2026-10-27';
+  static const String kAppReleaseDate = '2026-11-01';
   bool _isForceUpdateDialogShowing = false;
 
 
