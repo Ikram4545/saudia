@@ -124,6 +124,7 @@ class DrivingCarePortal {
     this.countActive = document.getElementById('countActive');
     this.countExpiring = document.getElementById('countExpiring');
     this.countExpired = document.getElementById('countExpired');
+    this.countReset = document.getElementById('countReset');
     this.countPending = document.getElementById('countPending');
 
     // Table & Empty State
@@ -476,7 +477,8 @@ class DrivingCarePortal {
         const target = this.drivers.find(d => d.key === key);
         if (target) {
           target.boundDeviceId = null;
-          target.device = 'Available (Reset)';
+          target.status = 'pending';
+          target.device = 'Reset (Pending Approval)';
           this.saveDrivers(this.drivers);
         }
         this.render();
@@ -647,6 +649,7 @@ class DrivingCarePortal {
     let expiring = 0;
     let expired = 0;
     let pending = 0;
+    let reset = 0;
     let totalRevSAR = 0;
     let totalMyShareSAR = 0;
     let totalClientShareSAR = 0;
@@ -657,8 +660,12 @@ class DrivingCarePortal {
       const myP = d.myShare !== undefined ? parseFloat(d.myShare) : (price * (comm / 100));
       const clientP = d.clientShare !== undefined ? parseFloat(d.clientShare) : (price - myP);
 
+      const isReset = (d.device && d.device.includes('Reset')) || d.isReset === true || d.bilalStatus === 'device_reset';
+      if (isReset) {
+        reset++;
+      }
       if (d.status === 'pending') {
-        pending++;
+        if (!isReset) pending++;
       } else {
         const rem = this.getRemainingDetails(d);
         if (d.status === 'active' && rem.days > 0) {
@@ -693,6 +700,7 @@ class DrivingCarePortal {
     if (this.countActive) this.countActive.textContent = active;
     if (this.countExpiring) this.countExpiring.textContent = expiring;
     if (this.countExpired) this.countExpired.textContent = expired;
+    if (this.countReset) this.countReset.textContent = reset;
     if (this.countPending) this.countPending.textContent = pending;
   }
 
@@ -703,6 +711,7 @@ class DrivingCarePortal {
       const rem = this.getRemainingDetails(d);
 
       // Tab filter
+      const isReset = (d.device && d.device.includes('Reset')) || d.isReset === true || d.bilalStatus === 'device_reset';
       if (this.activeFilter === 'active') {
         if (d.status !== 'active' || rem.days <= 0) return false;
       } else if (this.activeFilter === 'expiring') {
@@ -710,8 +719,10 @@ class DrivingCarePortal {
       } else if (this.activeFilter === 'expired') {
         if (d.status === 'pending') return false;
         if (d.status !== 'expired' && rem.days > 0) return false;
+      } else if (this.activeFilter === 'reset') {
+        if (!isReset) return false;
       } else if (this.activeFilter === 'pending') {
-        if (d.status !== 'pending') return false;
+        if (d.status !== 'pending' || isReset) return false;
       }
 
       // Search filter
@@ -756,6 +767,17 @@ class DrivingCarePortal {
 
       const cleanPhone = (d.phone || '').replace(/[^0-9]/g, '');
       const waUrl = cleanPhone ? `https://wa.me/${cleanPhone}` : '#';
+
+      const salePriceNum = parseFloat(d.salePrice || d.feeSAR || 40) || 40;
+      const commPercentNum = parseFloat(d.commissionPercent || 40) || 40;
+      const myShareNum = (d.myShare !== undefined && d.myShare !== null && d.myShare !== '')
+        ? (parseFloat(d.myShare) || 0)
+        : (salePriceNum * (commPercentNum / 100));
+      const clientShareNum = (d.clientShare !== undefined && d.clientShare !== null && d.clientShare !== '')
+        ? (parseFloat(d.clientShare) || 0)
+        : (salePriceNum - myShareNum);
+      const boundDevStr = d.boundDeviceId ? String(d.boundDeviceId) : '';
+      const reqDevStr = d.requestedDeviceId ? String(d.requestedDeviceId) : '';
 
       // Action buttons
       let actionPrimary = '';
@@ -802,17 +824,17 @@ class DrivingCarePortal {
               🔑 ${d.key} ${d.signedKey ? '<span style="font-size: 0.65rem; background: #10b981; color: #fff; padding: 2px 6px; border-radius: 4px; margin-left: 4px; font-weight: 700;">Signed ✔</span>' : ''}
             </span>
             <div style="font-size: 0.72rem; color: #94a3b8; margin-top: 4px;">
-              📱 Device: <strong style="color: ${d.boundDeviceId ? '#10b981' : (d.requestedDeviceId ? '#38bdf8' : '#f59e0b')}">${d.boundDeviceId ? d.boundDeviceId.substring(0, 10) + '...' : (d.requestedDeviceId ? 'Req: ' + d.requestedDeviceId.substring(0, 8) + '...' : 'Available')}</strong>
+              📱 Device: <strong style="color: ${boundDevStr ? '#10b981' : (reqDevStr ? '#38bdf8' : '#f59e0b')}">${boundDevStr ? boundDevStr.substring(0, 10) + '...' : (reqDevStr ? 'Req: ' + reqDevStr.substring(0, 8) + '...' : 'Available')}</strong>
               ${d.requestedAt ? `<div style="font-size: 0.68rem; color: #f59e0b;">⏳ Requested: ${d.requestedAt}</div>` : ''}
             </div>
           </td>
           <td data-label="Selling Price & Split">
-            <div style="font-size: 0.95rem; font-weight: 800; color: #fff;">${d.salePrice || d.feeSAR || 40} SAR</div>
+            <div style="font-size: 0.95rem; font-weight: 800; color: #fff;">${salePriceNum} SAR</div>
             <div style="font-size: 0.75rem; color: #34d399; font-weight: 700; margin-top: 2px;">
-              My Profit: ${(d.myShare !== undefined ? d.myShare : ((d.salePrice || 40) * 0.4)).toFixed(0)} SAR (${d.commissionPercent || 40}%)
+              My Profit: ${myShareNum.toFixed(0)} SAR (${commPercentNum}%)
             </div>
             <div style="font-size: 0.72rem; color: #94a3b8;">
-              Client Share: ${(d.clientShare !== undefined ? d.clientShare : ((d.salePrice || 40) * 0.6)).toFixed(0)} SAR (${100 - (d.commissionPercent || 40)}%)
+              Client Share: ${clientShareNum.toFixed(0)} SAR (${100 - commPercentNum}%)
             </div>
           </td>
           <td data-label="Status & Validity">

@@ -30,6 +30,89 @@ if (empty($cleanKey)) {
 $db = get_db();
 $found = null;
 
+// Strict Name Validation
+if (empty($driverName) || mb_strlen($driverName) < 3 || strcasecmp($driverName, 'driver') === 0) {
+    http_response_code(200);
+    echo json_encode([
+        'success' => false,
+        'error' => 'invalid_name',
+        'message' => 'Barah-e-karam apna mukammal asli naam darj karein (kam az kam 3 haroof).'
+    ]);
+    exit;
+}
+
+// Duplicate Name Check across existing drivers
+$nameLower = mb_strtolower(trim($driverName));
+foreach ($db['drivers'] as $existingDriver) {
+    $existingKey = strtoupper(trim($existingDriver['key'] ?? ''));
+    if ($existingKey !== $cleanKey && !empty($existingDriver['name']) && strcasecmp($existingDriver['name'], 'driver') !== 0 && strcasecmp($existingDriver['name'], 'new saudi driver') !== 0) {
+        if (mb_strtolower(trim($existingDriver['name'])) === $nameLower) {
+            http_response_code(200);
+            echo json_encode([
+                'success' => false,
+                'error' => 'duplicate_name',
+                'message' => "Yeh naam '$driverName' pehle se registered hai. Barah-e-karam apna mukammal naam (e.g. '$driverName Khan') darj karein taake duplicate na ho."
+            ]);
+            exit;
+        }
+    }
+}
+
+// Strict WhatsApp / Phone Validation (Block Dummy Numbers & Repetitive Patterns)
+$digitsOnly = preg_replace('/[^0-9]/', '', $whatsapp);
+$isDummy = false;
+
+if (strlen($digitsOnly) < 8) {
+    $isDummy = true;
+} elseif (count(array_unique(str_split($digitsOnly))) <= 1) {
+    // All same digits, e.g. 00000000, 11111111
+    $isDummy = true;
+} else {
+    $commonDummies = ['12345678', '123456789', '98765432', '987654321', '11223344', '112233444', '123123123', '01234567'];
+    foreach ($commonDummies as $dum) {
+        if (strpos($digitsOnly, $dum) !== false) {
+            $isDummy = true;
+            break;
+        }
+    }
+    // Check repeated blocks like 112233444
+    if (!$isDummy && strlen($digitsOnly) >= 6 && ($digitsOnly[0] === $digitsOnly[1] && $digitsOnly[2] === $digitsOnly[3] && $digitsOnly[4] === $digitsOnly[5])) {
+        $isDummy = true;
+    }
+}
+
+if ($isDummy) {
+    http_response_code(200);
+    echo json_encode([
+        'success' => false,
+        'error' => 'invalid_phone',
+        'message' => 'Barah-e-karam apna durust official WhatsApp number country code (+966) ke sath darj karein. Dummy numbers qabil-e-qubool nahi hain.'
+    ]);
+    exit;
+}
+
+// Duplicate Phone Check across existing drivers
+$last9 = substr($digitsOnly, -9);
+if (strlen($last9) >= 9) {
+    foreach ($db['drivers'] as $existingDriver) {
+        $existingKey = strtoupper(trim($existingDriver['key'] ?? ''));
+        if ($existingKey !== $cleanKey) {
+            $exPhone = $existingDriver['whatsapp'] ?? $existingDriver['phone'] ?? '';
+            $exDigits = preg_replace('/[^0-9]/', '', $exPhone);
+            if (strlen($exDigits) >= 9 && substr($exDigits, -9) === $last9) {
+                http_response_code(200);
+                echo json_encode([
+                    'success' => false,
+                    'error' => 'duplicate_phone',
+                    'message' => "Yeh WhatsApp number ($whatsapp) pehle se kisi doosri key ke sath registered hai. Barah-e-karam apna alag number darj karein."
+                ]);
+                exit;
+            }
+        }
+    }
+}
+
+
 foreach ($db['drivers'] as &$driver) {
     $driverKey = strtoupper(trim($driver['key'] ?? ''));
     $driverNormalized = preg_replace('/[^A-Z0-9]/', '', $driverKey);

@@ -26,12 +26,19 @@ foreach ($db['drivers'] as &$driver) {
         $driver['status'] = $newStatus;
         
         if ($newStatus === 'active') {
+            $driver['isReset'] = false;
+            if (isset($driver['device']) && strpos($driver['device'], 'Reset') !== false) {
+                $driver['device'] = 'Approved / Re-activated';
+            }
             $nowMs = time() * 1000;
             $currentUntil = !empty($driver['activeUntil']) ? intval($driver['activeUntil']) : 0;
             
             // If already active with future expiry, add 30 days to existing expiry; otherwise 30 days from now
             if ($currentUntil > $nowMs && $prevStatus === 'active') {
                 $driver['activeUntil'] = $currentUntil + (30 * 86400 * 1000);
+            } elseif ($currentUntil > $nowMs && $prevStatus === 'pending') {
+                // Device was reset: keep driver's remaining days (or minimum 30 days)
+                $driver['activeUntil'] = max($currentUntil, $nowMs + (30 * 86400 * 1000));
             } else {
                 $driver['activeUntil'] = $nowMs + (30 * 86400 * 1000);
             }
@@ -42,6 +49,7 @@ foreach ($db['drivers'] as &$driver) {
             // Bind device if requested from phone
             if (empty($driver['boundDeviceId']) && !empty($driver['requestedDeviceId'])) {
                 $driver['boundDeviceId'] = $driver['requestedDeviceId'];
+                $driver['device'] = $driver['requestedDevice'] ?? "Android ({$driver['requestedDeviceId']})";
             }
             if (!empty($data['name']) && ($driver['name'] === 'Unassigned Driver' || strpos($driver['name'], 'Unassigned Driver') === 0)) {
                 $driver['name'] = trim($data['name']);
@@ -79,7 +87,7 @@ if ($found) {
     echo json_encode([
         'success' => true, 
         'message' => ($newStatus === 'active' && $prevStatus !== 'active') 
-            ? "Driver $key successfully activated for 30 days!" 
+            ? "Driver $key successfully approved & activated!" 
             : "Driver $key renewed for +30 days!"
     ]);
 } else {

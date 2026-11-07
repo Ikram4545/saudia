@@ -21,7 +21,11 @@ $updated = false;
 foreach ($db['drivers'] as &$driver) {
     if (strtoupper(trim($driver['key'] ?? '')) === $key) {
         $driver['boundDeviceId'] = null;
-        $driver['device'] = 'Reset (Pending New Phone)';
+        $driver['requestedDeviceId'] = null;
+        $driver['device'] = 'Reset (Pending Approval)';
+        $driver['status'] = 'pending'; // Requires Admin to explicitly Approve before re-login
+        $driver['isReset'] = true;
+        $driver['resetAt'] = date('Y-m-d H:i:s');
         $updated = true;
         break;
     }
@@ -29,7 +33,7 @@ foreach ($db['drivers'] as &$driver) {
 
 if ($updated) {
     array_unshift($db['logs'], [
-        'event' => 'Device Binding Reset',
+        'event' => 'Device Binding Reset (Pending Approval)',
         'name' => $key,
         'key' => $key,
         'device' => 'Admin Action',
@@ -42,11 +46,12 @@ if ($updated) {
     $audit = get_master_audit_data();
     if (isset($audit['drivers'][$key])) {
         $audit['drivers'][$key]['bilalStatus'] = 'device_reset';
+        $audit['drivers'][$key]['status'] = 'pending';
         save_master_audit_data($audit);
     }
     echo json_encode([
         'success' => true,
-        'message' => "Key $key ki device binding reset ho chuki hai. Naya phone bind kiya ja sakta hai."
+        'message' => "Key $key ki device binding reset ho chuki hai aur status Pending kar diya gaya hai. Driver ab aapki dobara approval ke baghair login nahi kar sakega."
     ]);
 } else {
     echo json_encode(['success' => false, 'message' => "Driver key $key nahi mili."]);

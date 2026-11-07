@@ -22,17 +22,17 @@ if (empty($cleanKey) || $cleanKey === 'PING') {
 }
 
 
-// Check In-App Force Update
+// Check In-App Force Update (only if client explicitly provided versionCode, e.g. Flutter app)
 $updateConfigFile = __DIR__ . '/app_update_config.json';
 $updateConfig = [];
 if (file_exists($updateConfigFile)) {
     $updateConfig = json_decode(file_get_contents($updateConfigFile), true) ?? [];
 }
-$clientVersionCode = intval($data['versionCode'] ?? 0);
-$minVersionCode = intval($updateConfig['min_version_code'] ?? 7);
+$clientVersionCode = isset($data['versionCode']) ? intval($data['versionCode']) : null;
+$minVersionCode = intval($updateConfig['min_version_code'] ?? 8);
 $isForceUpdateActive = !empty($updateConfig['force_update']);
 
-if ($isForceUpdateActive && ($clientVersionCode < $minVersionCode)) {
+if ($isForceUpdateActive && $clientVersionCode !== null && ($clientVersionCode < $minVersionCode)) {
     echo json_encode([
         'success' => false,
         'lock' => true,

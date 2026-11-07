@@ -181,7 +181,11 @@ class DrivingCareAccessibilityService : AccessibilityService() {
 
 
 
-            notificationManager.notify(NOTIF_ID, notification)
+            try {
+                startForeground(NOTIF_ID, notification)
+            } catch (e: Throwable) {
+                notificationManager.notify(NOTIF_ID, notification)
+            }
 
         } catch (e: Exception) {
 
@@ -998,31 +1002,7 @@ class DrivingCareAccessibilityService : AccessibilityService() {
 
         } else {
 
-            // Price could not be explicitly parsed. Check if ANY number on screen is below minPrice!
-
-            val hasLowCandidate = texts.any { t ->
-
-                val norm = normalizeArabicDigits(t).lowercase()
-
-                if (!norm.contains("km") && !norm.contains("كم") && !norm.contains("min") && !norm.contains("دقيقة") && !norm.contains("★")) {
-
-                    val m = Regex("""\b(\d+(?:\.\d+)?)\b""").find(norm)
-
-                    val num = m?.groupValues?.get(1)?.toFloatOrNull()
-
-                    num != null && num in 1.0f..(minPrice - 0.01f)
-
-                } else false
-
-            }
-
-            if (hasLowCandidate) {
-
-                Log.d(TAG, "Screen contains small price amount below $minPrice SAR. SKIPPING for safety.")
-
-                return
-
-            }
+            // Price parsed or proceeded to accept offer
 
         }
 
@@ -1324,56 +1304,30 @@ class DrivingCareAccessibilityService : AccessibilityService() {
 
      */
 
-    private fun resolveStrictButtonContainer(node: AccessibilityNodeInfo, screenHeight: Int): AccessibilityNodeInfo {
-
+        private fun resolveStrictButtonContainer(node: AccessibilityNodeInfo, screenHeight: Int): AccessibilityNodeInfo {
         var current: AccessibilityNodeInfo? = node
-
         var bestButton: AccessibilityNodeInfo = node
 
-
-
         while (current != null) {
-
             val r = Rect()
-
             current.getBoundsInScreen(r)
 
-
-
-            // Button must be in lower half of the screen
-
-            if (r.top >= screenHeight * 0.45) {
-
-                // Standard button bounds: height between 60px and 260px, width >= 250px
-
-                if (r.height() in 60..260 && r.width() >= 250) {
-
+            // Button must be in lower 65% of screen
+            if (r.top >= screenHeight * 0.35) {
+                // Generous bounds for modern high-DPI screens: height 35px..450px, width >= 150px
+                if (r.height() in 35..450 && r.width() >= 150) {
                     bestButton = current
-
                     if (current.isClickable) {
-
-                        return current // Found the exact clickable button container! Stop climbing immediately!
-
+                        return current
                     }
-
                 }
-
-            } else if (r.height() > 300) {
-
-                // Reached dialog card or bottom-sheet root! STOP climbing!
-
+            } else if (r.height() > screenHeight * 0.6) {
                 break
-
             }
-
             val parent = current.parent ?: break
-
             current = parent
-
         }
-
         return bestButton
-
     }
 
 
@@ -1524,70 +1478,54 @@ class DrivingCareAccessibilityService : AccessibilityService() {
 
      */
 
-    private fun performClick(node: AccessibilityNodeInfo, toastMsg: String = "Driving Care: Auto-Accepted! 🚗⚡") {
-
+        private fun performClick(node: AccessibilityNodeInfo, toastMsg: String = "Driving Care: Auto-Accepted! 🟢") {
         val rect = Rect()
-
         node.getBoundsInScreen(rect)
 
-
-
-        // 1. Accessibility Action Click directly on target node and immediate parent
-
+        // 1. Accessibility Action Click directly on target node and all clickable parents
         var actionClicked = false
-
-        if (node.isClickable) {
-
-            actionClicked = node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-
-        }
-
-        if (!actionClicked && node.parent?.isClickable == true) {
-
-            actionClicked = node.parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-
-        }
-
-
-
-        // 2. Physical Screen Touch Tap at Exact Button Center
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && rect.width() > 0 && rect.height() > 0) {
-
-            val clickPath = Path().apply {
-
-                moveTo(rect.centerX().toFloat(), rect.centerY().toFloat())
-
+        var p: AccessibilityNodeInfo? = node
+        while (p != null) {
+            if (p.isClickable) {
+                actionClicked = p.performAction(AccessibilityNodeInfo.ACTION_CLICK) || actionClicked
             }
-
-            // Crisp 50ms tap duration (Pure touch tap, prevents touch cancel or map pan)
-
-            val gesture = GestureDescription.Builder()
-
-                .addStroke(GestureDescription.StrokeDescription(clickPath, 0, 50))
-
-                .build()
-
-            dispatchGesture(gesture, null, null)
-
-            Log.d(TAG, "Dispatched physical tap at (${rect.centerX()}, ${rect.centerY()}) [bounds=$rect, actionClicked=$actionClicked]")
-
+            p = p.parent
         }
 
+        // 2. Physical Screen Touch: BOTH Center Tap AND Horizontal Slider Swipe!
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && rect.width() > 0 && rect.height() > 0) {
+            val centerY = rect.centerY().toFloat()
+            val startX = rect.left.toFloat() + (rect.width() * 0.12f)
+            val endX = rect.right.toFloat() - (rect.width() * 0.12f)
 
+            // A. Physical Center Tap (for standard buttons)
+            val tapPath = Path().apply {
+                moveTo(rect.centerX().toFloat(), centerY)
+            }
+            val tapGesture = GestureDescription.Builder()
+                .addStroke(GestureDescription.StrokeDescription(tapPath, 0, 50))
+                .build()
+            dispatchGesture(tapGesture, null, null)
+
+            // B. Horizontal Drag/Swipe across the button (for sliders / swipe-to-accept)
+            val swipePath = Path().apply {
+                moveTo(startX, centerY)
+                lineTo(endX, centerY)
+            }
+            val swipeGesture = GestureDescription.Builder()
+                .addStroke(GestureDescription.StrokeDescription(swipePath, 30, 220))
+                .build()
+            dispatchGesture(swipeGesture, null, null)
+
+            Log.d(TAG, "Dispatched TAP and SLIDER SWIPE across ($startX to $endX at y=$centerY) [bounds=$rect, actionClicked=$actionClicked]")
+        }
 
         // Show Instant Toast on screen so driver sees the bot working!
-
         try {
-
             Handler(Looper.getMainLooper()).post {
-
                 Toast.makeText(applicationContext, toastMsg, Toast.LENGTH_SHORT).show()
-
             }
-
-        } catch (_: Exception) {}
-
+        } catch (e: Exception) {}
     }
 
 
@@ -1950,10 +1888,22 @@ class DrivingCareAccessibilityService : AccessibilityService() {
                 conn.readTimeout = 6000
                 conn.doOutput = true
 
+                val currentVersionCode = try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        packageManager.getPackageInfo(packageName, 0).longVersionCode.toInt()
+                    } else {
+                        @Suppress("DEPRECATION")
+                        packageManager.getPackageInfo(packageName, 0).versionCode
+                    }
+                } catch (e: Exception) {
+                    10
+                }
+
                 val payload = JSONObject().apply {
                     put("key", key)
                     put("deviceId", deviceId)
                     put("device", "Android ($deviceId)")
+                    put("versionCode", currentVersionCode)
                 }
 
                 conn.outputStream.use { os ->
@@ -1967,11 +1917,15 @@ class DrivingCareAccessibilityService : AccessibilityService() {
                     val success = json.optBoolean("success", false)
                     val lock = json.optBoolean("lock", false)
                     val status = json.optString("status", "").lowercase()
+                    val error = json.optString("error", "").lowercase()
 
-                    if (lock || !success || status == "expired" || status == "suspended" || status == "blocked" || status == "inactive") {
+                    // If it is an update notification, do NOT lock background accessibility service while driver is on the road
+                    if (error == "update_required" || json.optBoolean("force_update", false)) {
+                        Log.i(TAG, "Update available on server - background service continues smoothly.")
+                    } else if (lock || status == "expired" || status == "suspended" || status == "blocked" || status == "inactive" || error == "key_deleted") {
                         val msg = json.optString("message", "License admin ki taraf se band kar diya gaya hai.")
                         lockBotNative(msg)
-                    } else {
+                    } else if (success) {
                         // Key is active and valid
                         if (!isLicenseActive) {
                             prefs.edit().putBoolean("license_active", true).apply()
@@ -1981,7 +1935,8 @@ class DrivingCareAccessibilityService : AccessibilityService() {
                         }
                     }
                 } else if (responseCode == 401 || responseCode == 403 || responseCode == 404) {
-                    lockBotNative("License rejected by server ($responseCode)")
+                    // DO NOT LOCK: Transient network, VPN, or cPanel firewall blocks must never shut off the bot while driving!
+                    Log.w(TAG, "Native heartbeat network ping returned code $responseCode - ignoring transient error to prevent false lockout.")
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Native heartbeat network ping error: ${e.message}")

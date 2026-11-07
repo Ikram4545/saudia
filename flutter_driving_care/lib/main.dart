@@ -208,8 +208,8 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
   static const platform = MethodChannel('com.drivingcare.saudi/accessibility');
 
   // App Versioning & In-App Force Update Control
-  static const int kAppVersionCode = 8;
-  static const String kAppVersionName = '2.6.0';
+  static const int kAppVersionCode = 11;
+  static const String kAppVersionName = '2.6.3';
   static const String kAppReleaseDate = '2026-11-01';
   bool _isForceUpdateDialogShowing = false;
 
@@ -2334,11 +2334,28 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
       return;
     }
 
-    if (whatsapp.isEmpty || whatsapp.length < 8) {
+    if (name.isEmpty || name.length < 3) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Color(0xFFEF4444),
-          content: Text('Barah-e-karam apna durust WhatsApp number darj karein (+966...).'),
+          content: Text('Barah-e-karam apna mukammal asli naam darj karein (kam az kam 3 haroof).'),
+        ),
+      );
+      return;
+    }
+
+    final digitsOnly = whatsapp.replaceAll(RegExp(r'[^0-9]'), '');
+    final isDummy = digitsOnly.length < 8 ||
+        RegExp(r'^(\d)\1+$').hasMatch(digitsOnly) ||
+        digitsOnly.contains('11223344') ||
+        digitsOnly.contains('12345678') ||
+        digitsOnly.contains('98765432');
+
+    if (whatsapp.isEmpty || isDummy) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFFEF4444),
+          content: Text('Barah-e-karam apna durust official WhatsApp number country code (+966) ke sath darj karein. Dummy numbers qabil-e-qubool nahi hain.'),
         ),
       );
       return;
@@ -2496,7 +2513,9 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
     try {
 
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 8)
+        ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
 
       client.userAgent = 'DrivingCareApp/$kAppVersionName';
 
@@ -3105,15 +3124,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
         actions: [
 
-          IconButton(
-
-            tooltip: 'Support & Server Settings',
-
-            icon: const Icon(Icons.tune_rounded),
-
-            onPressed: _showSupportConfigDialog,
-
-          ),
+          
 
           IconButton(
 
@@ -3522,15 +3533,7 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
 
                     ),
 
-                    IconButton(
-
-                      icon: const Icon(Icons.edit_note_rounded, color: Colors.grey, size: 26),
-
-                      tooltip: 'Change Support Number',
-
-                      onPressed: _showSupportConfigDialog,
-
-                    ),
+                    
 
                   ],
 
