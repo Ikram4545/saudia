@@ -208,8 +208,8 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
   static const platform = MethodChannel('com.drivingcare.saudi/accessibility');
 
   // App Versioning & In-App Force Update Control
-  static const int kAppVersionCode = 11;
-  static const String kAppVersionName = '2.6.3';
+  static const int kAppVersionCode = 12;
+  static const String kAppVersionName = '2.6.4';
   static const String kAppReleaseDate = '2026-11-01';
   bool _isForceUpdateDialogShowing = false;
 
@@ -2102,6 +2102,8 @@ class _DrivingCareHomeScreenState extends State<DrivingCareHomeScreen> with Widg
         'maxPickupTime': double.tryParse(maxPickupTime) ?? 10.0,
 
         'autoReject': autoReject,
+        'uberEnabled': uberSelected,
+        'boltEnabled': boltSelected,
 
         'blockedLocations': blocked,
 

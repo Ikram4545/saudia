@@ -263,6 +263,8 @@ class MainActivity : FlutterActivity() {
                         call.argument<Double>("maxPrice")?.let { editor.putFloat("max_price", it.toFloat()) }
                         call.argument<Double>("maxPickupTime")?.let { editor.putFloat("max_pickup_time", it.toFloat()) }
                         call.argument<Boolean>("autoReject")?.let { editor.putBoolean("auto_reject", it) }
+                        call.argument<Boolean>("uberEnabled")?.let { editor.putBoolean("uber_enabled", it) }
+                        call.argument<Boolean>("boltEnabled")?.let { editor.putBoolean("bolt_enabled", it) }
                         call.argument<List<String>>("blockedLocations")?.let { editor.putStringSet("blocked_locations", it.toSet()) }
                         call.argument<List<String>>("avoidWords")?.let { editor.putStringSet("avoid_words", it.toSet()) }
                         // Feature flags used by the notification listener + floating button

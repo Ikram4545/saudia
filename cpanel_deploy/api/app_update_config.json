@@ -1,10 +1,11 @@
 {
+  "min_version_code": 12,
+  "latest_version_code": 12,
+  "latest_version_name": "2.6.4",
+  "release_date": "2026-11-07",
   "force_update": true,
-  "min_version_code": 9,
-  "latest_version_name": "2.6.1",
-  "release_date": "2026-11-02",
-  "title": "⚠️ Zaroori Update Dastyab Hai",
-  "message": "Driving Care ka naya version 2.6.1 dastyab hai. Server settings aur security updates ke sath naya version install karein. Purana version band ho gaya hai.",
+  "title": "⚠️ Zaroori Update Dastyab Hai (v2.6.4)",
+  "message": "Driving Care v2.6.4 zaroori update dastyab hai. Area blocking aur instant order acceptance ka masla 100% theek kar diya gaya hai. Foran update karein.",
   "apk_url": "https://drivewithbilal.com/DrivingCare.apk",
   "download_page": "https://drivewithbilal.com/download.php"
 }

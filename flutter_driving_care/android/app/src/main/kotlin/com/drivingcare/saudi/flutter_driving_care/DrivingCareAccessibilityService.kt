@@ -428,15 +428,20 @@ class DrivingCareAccessibilityService : AccessibilityService() {
 
 
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        private fun getCompleteRoot(event: AccessibilityEvent?): AccessibilityNodeInfo? {
+        val active = rootInActiveWindow
+        if (active != null) return active
+        var node = event?.source ?: return null
+        while (node.parent != null) {
+            node = node.parent
+        }
+        return node
+    }
 
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
 
-
-
         val packageName = event.packageName?.toString() ?: ""
-
-
 
         // Always read latest prefs
         prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -444,45 +449,23 @@ class DrivingCareAccessibilityService : AccessibilityService() {
         val isEngineOn = prefs.getBoolean("run_auto_engine", false)
         if (!isLicenseActive || !isEngineOn) return
 
-
-
-        // STRICT APP LOCK: Strictly Jeeny Driver only (or Uber/Bolt if driver explicitly enabled them)
-
-        // Strictly ignore third-party apps like Sama, Jahez, Hungerstation, WhatsApp, etc.
-
+        // STRICT APP LOCK: Jeeny Driver, Uber, Bolt
         val isJeeny = packageName.contains("easytaxista", ignoreCase = true) ||
-
                       packageName.contains("jeeny", ignoreCase = true) ||
-
                       packageName.contains("easytaxi", ignoreCase = true)
-
-        val allowUber = prefs.getBoolean("uber_enabled", false) && packageName.contains("ubercab", ignoreCase = true)
-
-        val allowBolt = prefs.getBoolean("bolt_enabled", false) && (packageName.contains("bolt", ignoreCase = true) || packageName.contains("mtakso", ignoreCase = true))
-
-
+        val allowUber = prefs.getBoolean("uber_enabled", true) && packageName.contains("ubercab", ignoreCase = true)
+        val allowBolt = prefs.getBoolean("bolt_enabled", true) && (packageName.contains("bolt", ignoreCase = true) || packageName.contains("mtakso", ignoreCase = true))
 
         if (!(isJeeny || allowUber || allowBolt)) {
-
             return
-
         }
 
-
-
         // Fast Debounce: 250ms to allow ultra-fast reaction without duplicate spam
-
         val now = System.currentTimeMillis()
-
         if (now - lastActionTime < 250) return
 
-
-
         try {
-
-            // Check event.source first (critical for bottom sheets and popup dialogs), fallback to rootInActiveWindow
-
-            val rootNode = event.source ?: rootInActiveWindow ?: return
+            val rootNode = getCompleteRoot(event) ?: return
 
 
 
@@ -539,37 +522,24 @@ class DrivingCareAccessibilityService : AccessibilityService() {
      */
 
     private fun isRealRideOffer(texts: List<String>): Boolean {
-
         val full = texts.joinToString(" ").lowercase()
+        val normFull = normalizeArabicText(full)
 
+        // 1. Must contain an accept trigger phrase (Accept Offer, قبول, تأكيد, etc.)
+        val hasAcceptWord = acceptKeywords.any { full.contains(it.lowercase()) || normFull.contains(normalizeArabicText(it)) }
+        if (hasAcceptWord) return true
 
+        // 2. Or explicit swipe keywords
+        val hasSwipeWord = explicitSwipeKeywords.any { full.contains(it.lowercase()) || normFull.contains(normalizeArabicText(it)) }
+        if (hasSwipeWord) return true
 
-        // 1. Must contain an accept trigger phrase
-
-        val hasAcceptWord = acceptKeywords.any { full.contains(it.lowercase()) }
-
-        if (!hasAcceptWord) return false
-
-
-
-        // 2. Must contain ride offer context (cannot just be map + balance)
-
-        val hasOfferContext = full.contains("you'll earn") || full.contains("you will earn") ||
-
-                full.contains("away") || full.contains("bonus") || full.contains("net earning") ||
-
-                full.contains("priority") || full.contains("city ride") || full.contains("eco") ||
-
-                full.contains("pickup") || full.contains("dropoff") || full.contains("مشوار") ||
-
-                full.contains("طلب جديد") || full.contains("عرض جديد") || full.contains("دقيقة") ||
-
-                full.contains("كم") || full.contains("استلام")
-
-
+        // 3. Fallback: Check if there's any offer context
+        val hasOfferContext = full.contains("earn") || full.contains("away") || full.contains("city ride") ||
+                full.contains("eco") || full.contains("pickup") || full.contains("ستربح") ||
+                full.contains("على بعد") || full.contains("طلب جديد") || full.contains("توصيل") ||
+                full.contains("sar") || full.contains("ر.س") || full.contains("ريال")
 
         return hasOfferContext
-
     }
 
 
@@ -927,27 +897,26 @@ class DrivingCareAccessibilityService : AccessibilityService() {
 
 
         if (isLocationBlocked) {
+            Log.d(TAG, "⛔ Offer SKIPPED: Blocked location matched '$matchedBlockedKeyword'")
 
-            Log.d(TAG, "Offer SKIPPED: Blocked location matched '$matchedBlockedKeyword'")
+            // Visual notification to driver so they know area was successfully blocked
+            try {
+                Handler(Looper.getMainLooper()).post {
+                    Toast.makeText(applicationContext, "Driving Care: ⛔ Blocked Area ($matchedBlockedKeyword) - Skipped", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {}
 
             if (autoReject) {
-
                 val rejectBtn = findNodeByKeywords(rootNode, rejectKeywords)
-
+                    ?: findNodeByViewIds(rootNode, listOf("iv_close", "btn_close", "close_button", "btn_reject", "close", "cancel", "dismiss"))
                 if (rejectBtn != null) {
-
                     performClick(rejectBtn, "Auto-Rejected ($matchedBlockedKeyword)")
-
                     lastActionTime = System.currentTimeMillis()
-
                 }
-
             }
 
             // CRUCIAL: Immediately stop here! Never accept blocked locations!
-
             return
-
         }
 
 
@@ -1478,7 +1447,7 @@ class DrivingCareAccessibilityService : AccessibilityService() {
 
      */
 
-        private fun performClick(node: AccessibilityNodeInfo, toastMsg: String = "Driving Care: Auto-Accepted! 🟢") {
+        private fun performClick(node: AccessibilityNodeInfo, toastMsg: String = "Driving Care: Auto-Accepted! 🚀") {
         val rect = Rect()
         node.getBoundsInScreen(rect)
 
@@ -1492,32 +1461,36 @@ class DrivingCareAccessibilityService : AccessibilityService() {
             p = p.parent
         }
 
-        // 2. Physical Screen Touch: BOTH Center Tap AND Horizontal Slider Swipe!
+        // 2. Physical Screen Touch: Dedicated handling for Slider vs Standard Button
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && rect.width() > 0 && rect.height() > 0) {
             val centerY = rect.centerY().toFloat()
-            val startX = rect.left.toFloat() + (rect.width() * 0.12f)
-            val endX = rect.right.toFloat() - (rect.width() * 0.12f)
+            // Sliders are elongated horizontal bars (aspect ratio > 1.4 and width >= 180)
+            val isSlider = rect.width() >= 180 && rect.width() > rect.height() * 1.4
 
-            // A. Physical Center Tap (for standard buttons)
-            val tapPath = Path().apply {
-                moveTo(rect.centerX().toFloat(), centerY)
+            if (isSlider) {
+                // Drag from the left thumb across the bar to the right end!
+                val startX = rect.left.toFloat() + (rect.height() * 0.45f)
+                val endX = rect.right.toFloat() - (rect.height() * 0.35f)
+                val swipePath = Path().apply {
+                    moveTo(startX, centerY)
+                    lineTo(endX, centerY)
+                }
+                val swipeGesture = GestureDescription.Builder()
+                    .addStroke(GestureDescription.StrokeDescription(swipePath, 0, 260))
+                    .build()
+                dispatchGesture(swipeGesture, null, null)
+                Log.d(TAG, "Dispatched SLIDER SWIPE across ($startX to $endX at y=$centerY) [bounds=$rect, actionClicked=$actionClicked]")
+            } else {
+                // Standard Button: Physical Center Tap
+                val tapPath = Path().apply {
+                    moveTo(rect.centerX().toFloat(), centerY)
+                }
+                val tapGesture = GestureDescription.Builder()
+                    .addStroke(GestureDescription.StrokeDescription(tapPath, 0, 60))
+                    .build()
+                dispatchGesture(tapGesture, null, null)
+                Log.d(TAG, "Dispatched CENTER TAP at (${rect.centerX()}, $centerY) [bounds=$rect, actionClicked=$actionClicked]")
             }
-            val tapGesture = GestureDescription.Builder()
-                .addStroke(GestureDescription.StrokeDescription(tapPath, 0, 50))
-                .build()
-            dispatchGesture(tapGesture, null, null)
-
-            // B. Horizontal Drag/Swipe across the button (for sliders / swipe-to-accept)
-            val swipePath = Path().apply {
-                moveTo(startX, centerY)
-                lineTo(endX, centerY)
-            }
-            val swipeGesture = GestureDescription.Builder()
-                .addStroke(GestureDescription.StrokeDescription(swipePath, 30, 220))
-                .build()
-            dispatchGesture(swipeGesture, null, null)
-
-            Log.d(TAG, "Dispatched TAP and SLIDER SWIPE across ($startX to $endX at y=$centerY) [bounds=$rect, actionClicked=$actionClicked]")
         }
 
         // Show Instant Toast on screen so driver sees the bot working!
