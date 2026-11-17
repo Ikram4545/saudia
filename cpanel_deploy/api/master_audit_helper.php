@@ -21,7 +21,7 @@ function get_master_audit_data() {
 
 function save_master_audit_data($data) {
     $file = get_master_audit_file();
-    @file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    @file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
 }
 
 function record_master_audit($event, $driverKey, $name = '', $whatsapp = '', $deviceId = '', $deviceModel = '', $clientIp = '') {

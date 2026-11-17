@@ -13,9 +13,8 @@ $creds = get_admin_credentials();
 $valid_users = $creds['allowed_users'] ?? ['ikramadmin', 'ikram', 'bilal', 'admin'];
 
 if (in_array($username, $valid_users) && (hash_equals($creds['password'], $password) || $password === $creds['password'])) {
-    // Generate secure token
-    $salt = $creds['secret_salt'] ?? 'dc_secure_salt_saudia_2026';
-    $token = hash('sha256', 'driving_care_master_' . $salt . '_' . date('Y-m-d'));
+    // Generate persistent secure token (does not expire every 24 hours)
+    $token = get_persistent_admin_token($creds);
     
     $db = get_db();
     $client_ip = get_client_ip();

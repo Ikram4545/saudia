@@ -143,18 +143,29 @@ if (!empty($deviceId) && $existingBoundId !== $deviceId) {
 }
 
 // Key is completely valid and active
+$needsSave = false;
+$lastPingSec = !empty($found['lastPing']) ? strtotime($found['lastPing']) : 0;
+if (empty($found['online']) || ($nowSec - $lastPingSec) > 45) {
+    $needsSave = true;
+}
+if (!empty($whatsapp) && empty($found['whatsapp'])) {
+    $found['whatsapp'] = $whatsapp;
+    $found['phone'] = $whatsapp;
+    $needsSave = true;
+}
+if (!empty($driverName) && ($found['name'] === 'Driver' || empty($found['name']))) {
+    $found['name'] = $driverName;
+    $needsSave = true;
+}
+
 $found['online'] = true;
 $found['lastPing'] = date('c');
 $found['ip'] = $client_ip;
 $found['device'] = $device;
-if (!empty($whatsapp) && empty($found['whatsapp'])) {
-    $found['whatsapp'] = $whatsapp;
-    $found['phone'] = $whatsapp;
+
+if ($needsSave) {
+    save_db($db);
 }
-if (!empty($driverName) && ($found['name'] === 'Driver' || empty($found['name']))) {
-    $found['name'] = $driverName;
-}
-save_db($db);
 record_master_audit('Heartbeat Ping', $found['key'], $found['name'], $found['whatsapp'] ?? $whatsapp, $deviceId, $device, $client_ip);
 
 echo json_encode([
