@@ -39,7 +39,7 @@ foreach ($db['drivers'] as $driver) {
 if ($found) {
     $db['drivers'] = $new_drivers;
     if (count($db['logs']) > 50) array_pop($db['logs']);
-    save_db($db);
+    save_db($db, count($new_drivers) === 0);
     record_master_audit('Deleted by Bilal (Admin Portal)', $key, '', '', '', '', get_client_ip());
     $audit = get_master_audit_data();
     if (isset($audit['drivers'][$key])) {

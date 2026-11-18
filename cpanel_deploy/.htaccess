@@ -20,7 +20,7 @@ RewriteCond %{REQUEST_METHOD} OPTIONS
 RewriteRule ^(.*)$ $1 [R=200,L]
 
 # Protect Confidential Databases and Configs from Direct Browser Access
-<FilesMatch "(\.json|admin_config\.php|\.bak)$">
+<FilesMatch "(\.json|\.sqlite|\.sqlite-wal|\.sqlite-shm|\.db|admin_config\.php|\.bak)$">
     Order Allow,Deny
     Deny from all
     Require all denied
